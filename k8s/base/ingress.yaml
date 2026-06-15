@@ -1,0 +1,33 @@
+# ============================================
+# Ingress：对外 HTTP/WebSocket 入口（v1beta1 - 兼容 k8s 1.18+）
+# host 为占位符，各环境通过 overlay 覆盖
+# ============================================
+apiVersion: networking.k8s.io/v1beta1
+kind: Ingress
+metadata:
+  name: ruanks
+  namespace: ruanks
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    # WebSocket 长连接超时
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "30"
+    # 粘性会话（多副本下 WebSocket 不中断的关键）
+    nginx.ingress.kubernetes.io/affinity: "cookie"
+    nginx.ingress.kubernetes.io/session-cookie-name: "ruanks_route"
+    nginx.ingress.kubernetes.io/session-cookie-path: "/"
+    nginx.ingress.kubernetes.io/session-cookie-max-age: "172800"
+    nginx.ingress.kubernetes.io/session-cookie-expires: "172800"
+    # 文件上传限制
+    nginx.ingress.kubernetes.io/proxy-body-size: "55m"
+spec:
+  rules:
+    - host: ruanks.example.com    # overlays 中替换为你的域名
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              serviceName: ruanks
+              servicePort: 8766

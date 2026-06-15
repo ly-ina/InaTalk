@@ -7,7 +7,7 @@
 ## 项目结构
 
 ```
-InaTalk/
+ruanks/
 ├── main.py                    # 入口文件
 ├── src/
 │   ├── config.py              # 全局配置 & Supabase 客户端
@@ -22,6 +22,11 @@ InaTalk/
 │   ├── index.html             # 前端页面
 │   ├── css/                   # 样式文件 (5个)
 │   └── js/                    # 前端逻辑 (6个)
+├── k8s/
+│   ├── base/                  # K8s 部署清单（Deployment/Service/Ingress/HPA）
+│   └── overlays/              # Kustomize overlay 示例
+├── Dockerfile                 # 容器镜像构建
+├── deploy.sh                  # 一键部署脚本（3 节点集群）
 ├── requirements.txt
 └── README.md
 ```
@@ -251,3 +256,31 @@ MAX_BG_SIZE = 10*1024**2       # 背景图大小限制（10MB）
 | `online_users` | S→C | 在线成员更新 |
 | `system` | S→C | 系统通知 |
 | `error` | S→C | 错误信息 |
+
+---
+
+## Kubernetes 部署
+
+支持 Docker + K8s 集群部署（Python 3.13-slim）。
+
+```bash
+# 构建镜像
+docker build --no-cache -t ruanks:latest .
+
+# 部署
+kubectl apply -k k8s/base/
+
+# 一键更新（镜像重建 + 滚动重启，需先配置 SSH 免密）
+sh deploy.sh
+```
+
+> 如 Pod DNS 解析慢，可用 `hostAliases` 写死 Supabase IP 加速。
+
+---
+
+## 已知问题
+
+| 问题 | 状态 |
+|------|------|
+| 文件下载返回损坏 JSON | 🟡 待修复 — Supabase Storage 签名 URL 返回非预期响应 |
+| K8s 多副本 WebSocket 路由不一致 | 🟡 已规避 — 单副本运行，后续需 Ingress sticky session |

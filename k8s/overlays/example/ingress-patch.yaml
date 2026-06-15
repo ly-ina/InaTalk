@@ -1,0 +1,27 @@
+# ============================================
+# 示例：将 Ingress host 改为 nip.io 格式
+# nip.io 将 "<anything>.<ip>.nip.io" 自动解析为 <ip>
+# 无需配置 DNS，适合测试环境
+# ============================================
+#
+# 用法说明：
+#   把下方 192.168.20.137 替换为你的任一 k8s 节点 IP
+#   所有机器访问 http://ruanks.192.168.20.137.nip.io 即可互通
+#
+#   kubectl apply -k k8s/overlays/example/
+
+apiVersion: networking.k8s.io/v1beta1
+kind: Ingress
+metadata:
+  name: ruanks
+  namespace: ruanks
+spec:
+  rules:
+    - host: ruanks.192.168.20.137.nip.io   # 替换为你的节点 IP
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              serviceName: ruanks
+              servicePort: 8766

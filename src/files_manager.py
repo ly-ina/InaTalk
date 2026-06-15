@@ -1,13 +1,13 @@
 """
 文件管理：Supabase Storage 上传/下载/删除、元数据管理
 """
+import json
 import time
 import uuid
-from typing import Any
 
 from .config import (
     BACKGROUNDS_BUCKET, FILE_RETENTION, FILES_BUCKET,
-    REST_URL, STORAGE_URL, get_client, get_storage_client, SUPABASE_KEY, SUPABASE_URL,
+    REST_URL, STORAGE_URL, get_client, get_storage_client, SUPABASE_URL,
 )
 
 
@@ -56,9 +56,12 @@ async def _delete_from_storage(bucket: str, keys: list[str]):
     if not keys:
         return
     client = get_storage_client()
-    resp = await client.delete(
-        f"{STORAGE_URL}/object/{bucket}",
-        json={"prefixes": keys},
+    # 使用 request() 而非 delete()，因为旧版 httpx 的 delete() 不支持 body 参数
+    resp = await client.request(
+        method="DELETE",
+        url=f"{STORAGE_URL}/object/{bucket}",
+        content=json.dumps({"prefixes": keys}),
+        headers={"Content-Type": "application/json"},
     )
     if resp.status_code >= 400:
         print(f"[存储] 删除失败 ({resp.status_code}): {resp.text[:200]}")

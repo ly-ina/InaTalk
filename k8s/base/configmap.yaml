@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ruanks-config
+  namespace: ruanks
+data:
+  PORT: "8766"
+  ROOM_EXPIRE_DAYS: "7"
+  CLEANUP_HOUR: "3"
+  CLEANUP_MINUTE: "0"
+  MAX_MSG_PER_ROOM: "200"
