@@ -30,22 +30,21 @@ InaTalk/
 
 ## 快速开始
 
-### 1. 安装依赖
+### 1. 一键准备（首次）
 
 ```bash
+# 克隆并安装依赖
+git clone <仓库地址> && cd ruanks
 pip install -r requirements.txt
+
+# 配置环境变量（复制模板 → 填入真实值）
+cp env.example .env
+# 编辑 .env，填入你的 Supabase URL 和 anon key
 ```
+
+> `.env` 已加入 `.gitignore`，不会提交到仓库，安全无虞。
 
 ### 2. 配置 Supabase
-
-创建 `.env` 文件：
-
-```env
-SUPABASE_URL=https://xxxxxxxxxxxx.supabase.co
-SUPABASE_ANON_KEY=your-anon-key
-```
-
-### 3. 创建数据库表
 
 在 Supabase SQL Editor 中执行以下建表语句（**复制全部一次性执行**）：
 
@@ -108,7 +107,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON public.messages TO anon;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.files    TO anon;
 ```
 
-### 4. 创建 Storage Bucket
+### 3. 创建 Storage Bucket（一次性）
 
 在 Supabase 控制台 → **Storage** → **New bucket**：
 
@@ -117,7 +116,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON public.files    TO anon;
 | `room-files` | **private** | 聊天文件存储 |
 | `room-backgrounds` | **public** | 房间背景图片 |
 
-### 5. 启动服务
+### 4. 启动服务
 
 ```bash
 # 普通模式
@@ -127,7 +126,7 @@ python main.py
 python main.py --dev
 ```
 
-### 6. 打开前端
+### 5. 打开前端
 
 浏览器访问 `http://localhost:8766`
 

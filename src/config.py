@@ -9,6 +9,20 @@ from dotenv import load_dotenv
 
 _ = load_dotenv()
 
+# ============ 环境变量检查 ============
+_required_vars = {
+    "SUPABASE_URL": "Supabase 项目地址，例如 https://xxxxxxxxxxxx.supabase.co",
+    "SUPABASE_ANON_KEY": "Supabase 匿名密钥（anon key）",
+}
+_missing = [k for k, v in _required_vars.items() if k not in os.environ or not os.environ[k]]
+if _missing:
+    _hints = "\n".join(f"  {k}  → {_required_vars[k]}" for k in _missing)
+    raise RuntimeError(
+        f"缺少必要的环境变量，请检查 .env 文件：\n{_hints}\n\n"
+        + "💡 首次使用？复制 env.example 并填入真实值：\n"
+        + "   cp env.example .env"
+    )
+
 # ============ 服务配置 ============
 HOST = "0.0.0.0"
 PORT = int(os.environ.get("PORT", "8766"))
