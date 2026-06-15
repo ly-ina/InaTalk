@@ -4,6 +4,32 @@
 
 ---
 
+## 项目结构
+
+```
+InaTalk/
+├── main.py                    # 入口文件
+├── src/
+│   ├── config.py              # 全局配置 & Supabase 客户端
+│   ├── auth.py                # 用户认证（密码哈希、登录、改名）
+│   ├── rooms.py               # 房间管理（创建、加入、列表）
+│   ├── messages.py            # 消息管理（保存、查询、裁剪）
+│   ├── files_manager.py       # 文件管理（元数据、上传、清理）
+│   ├── cleanup.py             # 定时清理（过期房间 & 文件）
+│   ├── websocket.py           # WebSocket 连接 & 消息路由
+│   └── routes.py              # HTTP 路由 & CORS 中间件
+├── static/
+│   ├── index.html             # 前端页面
+│   ├── css/
+│   │   └── style.css          # 样式
+│   └── js/
+│       └── app.js             # 前端逻辑
+├── requirements.txt
+└── README.md
+```
+
+---
+
 ## 快速开始
 
 ### 1. 安装依赖
@@ -11,8 +37,6 @@
 ```bash
 pip install -r requirements.txt
 ```
-
-依赖：`websockets`、`httpx`、`aiohttp`、`python-dotenv`。
 
 ### 2. 配置 Supabase
 
@@ -83,29 +107,15 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON public.messages TO anon;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.files    TO anon;
 ```
 
-### 3. 启动服务端
+### 3. 启动服务
 
 ```bash
-python server.py
-```
-
-启动后输出：
-
-```
-[服务] 数据库: Supabase (https://xxx.supabase.co)
-[服务] 房间过期时间: 7 天
-[服务] 每房间消息上限: 200 条
-[服务] 文件大小限制: 4GB
-[服务] 文件保留选项: 3h, 1d, 7d, 30d, forever
-[服务] HTTP 文件服务启动于 http://0.0.0.0:8766
-[服务] WebSocket 启动于 ws://0.0.0.0:8765
+python main.py
 ```
 
 ### 4. 打开前端
 
-直接用浏览器打开 `index.html`，或部署到任意 Web 服务器。
-
-> 如果通过局域网访问，修改 `app.js` 中的 `WS_URL` 和 `HTTP_URL` 为实际 IP。
+浏览器访问 `http://localhost:8766`
 
 ---
 
@@ -116,12 +126,11 @@ python server.py
 | 操作 | 说明 |
 |------|------|
 | 登录 | 输入**唯一用户名 + 密钥**，首次使用自动创建账号 |
-| 修改用户名 | 点击 ⚙ → "修改用户名"，输入新名字 + 当前密钥验证，密钥不变 |
+| 修改用户名 | 点击 ⚙ → "修改用户名"，输入新名字 + 当前密钥验证 |
 | 重置密钥 | 点击 ⚙ → "重置密钥"，验证当前密钥后设置新密钥 |
 | 退出登录 | 点击"退出"，清除本地信息 |
 
 - 无手机号、无邮箱，极度隐私
-- 用户名全局唯一（不可重复）
 - 密码使用 PBKDF2-SHA256（10 万次迭代）安全存储
 
 ### 房间系统
@@ -134,72 +143,29 @@ python server.py
 | 消息限制 | 每房间最多保留 200 条上下文消息 |
 | 自动清理 | 房间最后活跃超过 7 天 → 自动删除（含消息和文件） |
 
-### 聊天功能
-
-- 文字消息（支持回车发送，Shift+Enter 换行）
-- 30+ 基础表情（点击 😊 按钮选择）
-- 实时显示在线成员列表
-- 消息云端保存（每房间限 200 条）
-
-### 文件上传（新增）
+### 文件上传
 
 | 功能 | 说明 |
 |------|------|
 | 上传 | 点击 📎 按钮选择文件，支持任意格式 |
 | 大小限制 | 单文件最大 **4GB** |
 | 保留时长 | 3小时 / 1天 / 7天 / 30天 / 永久 |
-| 下载 | 文件消息气泡中直接下载，也可在 📁 文件面板查看所有文件 |
-| 删除 | 上传者可在文件面板中删除文件 |
+| 下载 | 文件消息气泡中直接下载 |
 | 自动清理 | 文件过期自动删除；房间过期则文件一并清除 |
-
-### 自动清理
-
-- 每天凌晨 3 点执行定时任务
-- 最后活跃 > 7 天的房间自动删除（含消息 + 文件）
-- 过期文件（超过保留时长）自动清理
-- 可在 `server.py` 顶部修改配置
 
 ---
 
 ## 配置说明
 
-在 `server.py` 文件顶部可修改：
+在 `src/config.py` 修改：
 
 ```python
-WS_HOST = "0.0.0.0"            # WebSocket 监听地址
-WS_PORT = 8765                 # WebSocket 端口
-HTTP_PORT = 8766               # HTTP 文件服务端口
-ROOM_EXPIRE_DAYS = 7           # 房间过期天数
-CLEANUP_HOUR = 3               # 每天清理时间（小时）
-CLEANUP_MINUTE = 0             # 每天清理时间（分钟）
-MAX_MSG_PER_ROOM = 200         # 每房间最大消息数
+HOST = "0.0.0.0"              # 监听地址
+PORT = 8766                     # 服务端口
+ROOM_EXPIRE_DAYS = 7            # 房间过期天数
+CLEANUP_HOUR = 3                # 每天清理时间（小时）
+MAX_MSG_PER_ROOM = 200          # 每房间最大消息数
 MAX_FILE_SIZE = 4*1024**3      # 文件大小限制（4GB）
-```
-
----
-
-## 界面操作流程
-
-```
-打开页面
-  │
-  ├─ 输入唯一用户名 + 密钥
-  │    ├─ 首次 → 自动创建账号
-  │    └─ 已有 → 验证密钥
-  │
-  ├─ 进入大厅
-  │    ├─ 创建房间（设定名称 + 可选密码）
-  │    └─ 加入已有房间（输入房间 ID + 密码）
-  │
-  ├─ 进入聊天室
-  │    ├─ 发送文字 / 表情
-  │    ├─ 📎 上传文件（选择保留时长）
-  │    ├─ 📁 查看共享文件面板（下载/删除）
-  │    ├─ 查看在线成员
-  │    └─ 点击 ⚙ → 修改用户名 / 重置密钥
-  │
-  └─ 关闭页面 → 房间仍在云端
-       └─ 长时间无消息 → 7 天后自动清理
 ```
 
 ---
@@ -207,28 +173,23 @@ MAX_FILE_SIZE = 4*1024**3      # 文件大小限制（4GB）
 ## 技术架构
 
 ```
-┌──────────────┐   WebSocket (8765)    ┌────────────────┐
-│  index.html  │ ◄───────────────────► │   server.py    │
-│  (前端页面)   │   JSON 消息协议        │  (Python 后端)  │
-│              │                       │                │
-│              │   HTTP (8766)         │                │
-│              │ ◄── 文件上传/下载 ───► │                │
-└──────────────┘                       └───────┬────────┘
-                                               │
-                                         ┌─────▼────┐
-                                         │ Supabase  │
-                                         │(PostgreSQL)│
-                                         └───────────┘
+┌──────────────┐   WebSocket + HTTP   ┌────────────────┐
+│  static/     │ ◄──────────────────► │   src/ 模块     │
+│  (前端页面)   │   同一端口 (8766)      │  (Python 后端)  │
+└──────────────┘                      └───────┬────────┘
+                                              │
+                                        ┌─────▼────┐
+                                        │ Supabase  │
+                                        │(PostgreSQL)│
+                                        └───────────┘
 ```
 
 | 层 | 技术 | 说明 |
 |----|------|------|
 | 前端 | HTML + CSS + JS | 纯原生，零框架 |
-| 通讯 | WebSocket | `websockets` 库，实时双向通讯 |
-| 文件 | HTTP | `aiohttp` 库，端口 8766 |
+| 通讯 | WebSocket | aiohttp，实时双向 |
 | 存储 | Supabase (PostgreSQL) | 云端数据库，持久化 |
-| 密码 | PBKDF2-SHA256 | `hashlib` 内置，10 万次迭代 + 随机盐 |
-| 并发 | asyncio | 异步 I/O，单进程高效处理 |
+| 密码 | PBKDF2-SHA256 | 10 万次迭代 + 随机盐 |
 
 ---
 
@@ -236,74 +197,24 @@ MAX_FILE_SIZE = 4*1024**3      # 文件大小限制（4GB）
 
 全部 JSON 格式，通过 `type` 字段区分：
 
-### 客户端 → 服务端
-
-| type | 字段 | 说明 |
+| type | 方向 | 说明 |
 |------|------|------|
-| `login` | `username`, `password` | 登录/创建账号 |
-| `get_rooms` | — | 获取房间列表 |
-| `create_room` | `name`, `password`(可选) | 创建房间 |
-| `join_room` | `room_id`, `password`(可选) | 加入房间 |
-| `leave_room` | — | 离开当前房间 |
-| `send_message` | `room_id`, `content`, `msg_type` | 发送消息 |
-| `get_files` | — | 获取文件列表 |
-| `delete_file` | `file_id` | 删除文件 |
-| `change_username` | `new_username`, `password` | 修改用户名 |
-| `reset_password` | `old_password`, `new_password` | 重置密钥 |
-| `logout` | — | 退出登录 |
-
-### 服务端 → 客户端
-
-| type | 说明 |
-|------|------|
-| `login_result` | 登录结果 |
-| `room_list` | 房间列表 |
-| `create_room_result` | 创建房间结果 |
-| `room_joined` | 成功加入房间（含历史消息） |
-| `new_message` | 新消息广播 |
-| `new_file` | 新文件广播 |
-| `file_list` | 文件列表 |
-| `file_deleted` | 文件已删除 |
-| `system` | 系统消息（加入/离开/改名） |
-| `online_users` | 在线成员列表 |
-| `change_username_result` | 改名结果 |
-| `reset_password_result` | 重置密钥结果 |
-| `room_left` | 已离开房间 |
-| `logout_result` | 退出结果 |
-| `error` | 错误信息 |
-
----
-
-## 数据存储
-
-所有数据存储在 Supabase PostgreSQL 中，包含四张表：
-
-- **users** — 用户名、密码哈希、盐值
-- **rooms** — 房间 ID、名称、密码哈希、创建者、最后活跃时间
-- **messages** — 消息内容、发送者、房间 ID、类型、时间（每房间限 200 条）
-- **files** — 文件元数据（ID、文件名、大小、保留时长、过期时间、存储路径）
-
----
-
-## 常见问题
-
-**Q: 忘记密钥怎么办？**
-A: 当前版本无找回密码功能。需要在 Supabase 中手动处理或重新创建账号。
-
-**Q: 能同时登录多个设备吗？**
-A: 可以。同一用户名可在多个浏览器标签页/设备登录，消息会同步广播。
-
-**Q: 消息保存多久？**
-A: 每房间最多保留 200 条消息，超出自动删除旧消息。房间过期后所有消息清空。
-
-**Q: 文件保存多久？**
-A: 上传时可选择保留时长（3小时/1天/7天/30天/永久）。即使文件未过期，房间过期后文件也会一并清除。
-
-**Q: 文件上传大小限制？**
-A: 单文件最大 4GB。
-
-**Q: 如何修改过期时间？**
-A: 编辑 `server.py` 顶部的 `ROOM_EXPIRE_DAYS` 等配置项，重启服务生效。
-
-**Q: 支持部署到公网吗？**
-A: 可以。在服务器上运行 `python server.py`，前端修改 `WS_URL` 和 `HTTP_URL` 即可。如需 HTTPS，建议配合 Nginx 反向代理 WSS 和 HTTPS。
+| `login` | C→S | 登录/创建账号 |
+| `get_rooms` | C→S | 获取房间列表 |
+| `create_room` | C→S | 创建房间 |
+| `join_room` | C→S | 加入房间 |
+| `leave_room` | C→S | 离开房间 |
+| `send_message` | C→S | 发送消息 |
+| `get_files` | C→S | 获取文件列表 |
+| `delete_file` | C→S | 删除文件 |
+| `change_username` | C→S | 修改用户名 |
+| `reset_password` | C→S | 重置密钥 |
+| `logout` | C→S | 退出登录 |
+| `login_result` | S→C | 登录结果 |
+| `room_list` | S→C | 房间列表 |
+| `room_joined` | S→C | 加入成功（含历史消息） |
+| `new_message` | S→C | 新消息广播 |
+| `new_file` | S→C | 新文件广播 |
+| `online_users` | S→C | 在线成员更新 |
+| `system` | S→C | 系统通知 |
+| `error` | S→C | 错误信息 |
