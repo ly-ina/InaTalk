@@ -1,0 +1,5 @@
+/* ============ 响应式 ============ */
+@media (max-width: 600px) {
+    .container { max-height: 100vh; border-radius: 0; }
+    .chat-sidebar { width: 140px; }
+}

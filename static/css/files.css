@@ -1,0 +1,99 @@
+/* ============ 文件上传按钮 ============ */
+.file-upload-btn { font-size: 0.95rem; }
+
+/* 保留时长选择 */
+.retention-options { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.retention-btn {
+    flex: 1 1 calc(50% - 4px); min-width: 100px;
+    padding: 10px 12px; border: 1.5px solid var(--border);
+    border-radius: 8px; background: #fff; cursor: pointer;
+    font-size: 0.85rem; font-weight: 500; transition: all .15s; text-align: center;
+}
+
+.retention-btn:hover { border-color: var(--primary); background: #f0f4ff; color: var(--primary); }
+
+/* ============ 文件气泡 ============ */
+.file-bubble {
+    display: flex !important; align-items: center; gap: 10px;
+    padding: 10px 14px !important; max-width: 320px;
+}
+
+.file-bubble .file-icon { font-size: 2rem; flex-shrink: 0; }
+
+.file-bubble .file-info { flex: 1; min-width: 0; }
+
+.file-bubble .file-name {
+    font-size: 0.85rem; font-weight: 600; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis; max-width: 180px;
+}
+
+.file-bubble .file-meta { font-size: 0.73rem; opacity: 0.7; margin-top: 2px; }
+
+.file-bubble .file-download {
+    flex-shrink: 0; font-size: 1.3rem; text-decoration: none;
+    opacity: 0.8; transition: opacity .15s;
+}
+
+.file-bubble .file-download:hover { opacity: 1; }
+
+.msg-row.other .file-bubble { background: var(--bubble-other); }
+
+.msg-row.self .file-bubble { background: var(--bubble-self); }
+
+/* ============ 文件面板 ============ */
+.file-panel {
+    display: none; flex-direction: column; border-top: 1px solid var(--border);
+    max-height: 200px; overflow: hidden; flex-shrink: 0; background: #fafbfc;
+}
+
+.file-panel.active { display: flex; }
+
+.file-panel-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 14px; font-size: 0.8rem; font-weight: 600;
+    color: var(--text-secondary); border-bottom: 1px solid var(--border);
+    text-transform: uppercase; letter-spacing: 0.5px;
+}
+
+.file-panel-close {
+    background: none; border: none; cursor: pointer;
+    font-size: 1rem; color: var(--text-secondary); padding: 2px 6px; border-radius: 4px;
+}
+
+.file-panel-close:hover { background: #e5e7eb; }
+
+.file-panel-list { flex: 1; overflow-y: auto; padding: 6px 10px; }
+
+.file-empty { text-align: center; color: var(--text-secondary); font-size: 0.8rem; padding: 16px; }
+
+.file-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 8px; border-radius: 6px; transition: background .1s;
+}
+
+.file-item:hover { background: #f0f2f5; }
+
+.file-item-icon { font-size: 1.1rem; flex-shrink: 0; }
+
+.file-item-info { flex: 1; min-width: 0; }
+
+.file-item-name {
+    font-size: 0.8rem; font-weight: 500; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis;
+}
+
+.file-item-meta { font-size: 0.7rem; color: var(--text-secondary); }
+
+.file-item-actions { display: flex; gap: 4px; flex-shrink: 0; }
+
+.file-item-dl { text-decoration: none; font-size: 1rem; padding: 2px 4px; border-radius: 4px; }
+
+.file-item-dl:hover { background: #e5e7eb; }
+
+.file-item-del {
+    background: none; border: none; cursor: pointer; font-size: 0.9rem;
+    padding: 2px 4px; border-radius: 4px; opacity: 0.5; transition: all .15s;
+}
+
+.file-item-del:hover { opacity: 1; background: #fee2e2; }

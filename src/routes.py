@@ -147,18 +147,20 @@ def create_app() -> web.Application:
     """创建并配置 aiohttp Application"""
     app = web.Application(client_max_size=MAX_FILE_SIZE, middlewares=[cors_middleware])
 
-    # WebSocket
+    # WebSocket（必须在静态路由前注册）
     app.router.add_route("GET", "/ws", ws_handler)
 
-    # API
+    # API（必须在静态路由前注册）
     app.router.add_route("POST", "/api/upload", handle_upload)
     app.router.add_route("GET", "/api/files/{file_id}", handle_download)
     app.router.add_route("GET", "/api/health", handle_health)
 
-    # 静态文件（URL 路径保持不变，文件在 static/ 目录下）
+    # 静态文件（兜底，API/WS 未匹配的请求由 static/ 目录响应）
+    # 显式注册 index.html，避免目录列表
     app.router.add_route("GET", "/", _serve_static(STATIC_DIR / "index.html"))
-    app.router.add_route("GET", "/app.js", _serve_static(STATIC_DIR / "js" / "app.js"))
-    app.router.add_route("GET", "/style.css", _serve_static(STATIC_DIR / "css" / "style.css"))
+    # 静态资源目录（禁用目录列表）
+    app.router.add_static("/css", STATIC_DIR / "css", show_index=False)
+    app.router.add_static("/js", STATIC_DIR / "js", show_index=False)
     return app
 
 
