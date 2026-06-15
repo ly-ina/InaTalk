@@ -1,6 +1,6 @@
 # 轻聊 · 临时 IM 系统
 
-纯 Python + Supabase (PostgreSQL) + WebSocket 打造的轻量化临时即时通讯系统。**无注册、无手机号**，开箱即用。
+纯 Python + Supabase (PostgreSQL + Storage) + WebSocket 打造的轻量化临时即时通讯系统。**无注册、无手机号**，开箱即用。
 
 ---
 
@@ -12,18 +12,16 @@ InaTalk/
 ├── src/
 │   ├── config.py              # 全局配置 & Supabase 客户端
 │   ├── auth.py                # 用户认证（密码哈希、登录、改名）
-│   ├── rooms.py               # 房间管理（创建、加入、列表）
+│   ├── rooms.py               # 房间管理（创建、加入、删除、密码/背景管理）
 │   ├── messages.py            # 消息管理（保存、查询、裁剪）
-│   ├── files_manager.py       # 文件管理（元数据、上传、清理）
+│   ├── files_manager.py       # 文件管理（Supabase Storage 上传/下载/清理）
 │   ├── cleanup.py             # 定时清理（过期房间 & 文件）
 │   ├── websocket.py           # WebSocket 连接 & 消息路由
 │   └── routes.py              # HTTP 路由 & CORS 中间件
 ├── static/
 │   ├── index.html             # 前端页面
-│   ├── css/
-│   │   └── style.css          # 样式
-│   └── js/
-│       └── app.js             # 前端逻辑
+│   ├── css/                   # 样式文件 (5个)
+│   └── js/                    # 前端逻辑 (6个)
 ├── requirements.txt
 └── README.md
 ```
@@ -47,6 +45,8 @@ SUPABASE_URL=https://xxxxxxxxxxxx.supabase.co
 SUPABASE_ANON_KEY=your-anon-key
 ```
 
+### 3. 创建数据库表
+
 在 Supabase SQL Editor 中执行以下建表语句（**复制全部一次性执行**）：
 
 ```sql
@@ -67,7 +67,8 @@ CREATE TABLE rooms (
     salt TEXT,
     creator TEXT NOT NULL,
     created_at DOUBLE PRECISION NOT NULL,
-    last_activity DOUBLE PRECISION NOT NULL
+    last_activity DOUBLE PRECISION NOT NULL,
+    background TEXT
 );
 
 -- 消息表
@@ -107,13 +108,26 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON public.messages TO anon;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.files    TO anon;
 ```
 
-### 3. 启动服务
+### 4. 创建 Storage Bucket
+
+在 Supabase 控制台 → **Storage** → **New bucket**：
+
+| Bucket 名称 | 权限 | 用途 |
+|------------|------|------|
+| `room-files` | **private** | 聊天文件存储 |
+| `room-backgrounds` | **public** | 房间背景图片 |
+
+### 5. 启动服务
 
 ```bash
+# 普通模式
 python main.py
+
+# 热更新模式（修改代码自动重启）
+python main.py --dev
 ```
 
-### 4. 打开前端
+### 6. 打开前端
 
 浏览器访问 `http://localhost:8766`
 
@@ -126,9 +140,9 @@ python main.py
 | 操作 | 说明 |
 |------|------|
 | 登录 | 输入**唯一用户名 + 密钥**，首次使用自动创建账号 |
-| 修改用户名 | 点击 ⚙ → "修改用户名"，输入新名字 + 当前密钥验证 |
-| 重置密钥 | 点击 ⚙ → "重置密钥"，验证当前密钥后设置新密钥 |
-| 退出登录 | 点击"退出"，清除本地信息 |
+| 修改用户名 | 点击 ⚙ → "修改用户名" |
+| 重置密钥 | 点击 ⚙ → "重置密钥" |
+| 退出登录 | 点击"退出" |
 
 - 无手机号、无邮箱，极度隐私
 - 密码使用 PBKDF2-SHA256（10 万次迭代）安全存储
@@ -138,20 +152,32 @@ python main.py
 | 操作 | 说明 |
 |------|------|
 | 创建房间 | 设置房间名 + 可选密码保护 |
-| 加入房间 | 输入 8 位房间 ID，如有密码需输入 |
+| 加入房间 | 搜索房间名或 8 位 ID，加密房间需密码 |
+| 在线成员 | 实时显示房间内在线列表 |
 | 云端存储 | 房间和消息持久化在 Supabase PostgreSQL |
 | 消息限制 | 每房间最多保留 200 条上下文消息 |
-| 自动清理 | 房间最后活跃超过 7 天 → 自动删除（含消息和文件） |
+| 自动清理 | 房间最后活跃超过 7 天 → 自动删除 |
+
+### 房间管理（仅创建者）
+
+| 操作 | 说明 |
+|------|------|
+| 🔑 密码管理 | 无密码时可添加密码；有密码时可修改或移除 |
+| 🖼️ 背景管理 | 上传房间背景图（JPG/PNG/GIF/WebP，≤10MB）；替换时自动清理旧图 |
+| 🗑️ 删除房间 | 确认后删除房间及所有消息、文件、背景 |
+
+入口：设置 → 🛠️ 房间管理
 
 ### 文件上传
 
 | 功能 | 说明 |
 |------|------|
-| 上传 | 点击 📎 按钮选择文件，支持任意格式 |
-| 大小限制 | 单文件最大 **4GB** |
+| 上传 | 点击 📎 按钮选择文件 |
+| 大小限制 | 单文件最大 **50MB** |
 | 保留时长 | 3小时 / 1天 / 7天 / 30天 / 永久 |
-| 下载 | 文件消息气泡中直接下载 |
-| 自动清理 | 文件过期自动删除；房间过期则文件一并清除 |
+| 存储 | **Supabase Storage**，不占服务器磁盘 |
+| 下载 | 通过签名 URL 安全下载（1小时有效） |
+| 删除房间 | 云端文件随房间一并删除 |
 
 ---
 
@@ -165,7 +191,8 @@ PORT = 8766                     # 服务端口
 ROOM_EXPIRE_DAYS = 7            # 房间过期天数
 CLEANUP_HOUR = 3                # 每天清理时间（小时）
 MAX_MSG_PER_ROOM = 200          # 每房间最大消息数
-MAX_FILE_SIZE = 4*1024**3      # 文件大小限制（4GB）
+MAX_FILE_SIZE = 50*1024**2     # 文件大小限制（50MB）
+MAX_BG_SIZE = 10*1024**2       # 背景图大小限制（10MB）
 ```
 
 ---
@@ -173,22 +200,24 @@ MAX_FILE_SIZE = 4*1024**3      # 文件大小限制（4GB）
 ## 技术架构
 
 ```
-┌──────────────┐   WebSocket + HTTP   ┌────────────────┐
-│  static/     │ ◄──────────────────► │   src/ 模块     │
-│  (前端页面)   │   同一端口 (8766)      │  (Python 后端)  │
-└──────────────┘                      └───────┬────────┘
+┌──────────────┐   WebSocket + HTTP   ┌───────────────────┐
+│  static/     │ ◄──────────────────► │   src/ 模块        │
+│  (前端页面)   │   同一端口 (8766)      │  (Python 后端)     │
+└──────────────┘                      └───────┬───────────┘
                                               │
-                                        ┌─────▼────┐
-                                        │ Supabase  │
-                                        │(PostgreSQL)│
-                                        └───────────┘
+                                  ┌───────────┴───────────┐
+                                  │       Supabase        │
+                                  │  PostgreSQL + Storage │
+                                  └───────────────────────┘
 ```
 
 | 层 | 技术 | 说明 |
 |----|------|------|
 | 前端 | HTML + CSS + JS | 纯原生，零框架 |
 | 通讯 | WebSocket | aiohttp，实时双向 |
-| 存储 | Supabase (PostgreSQL) | 云端数据库，持久化 |
+| 数据库 | Supabase PostgreSQL | 用户/房间/消息/文件元数据 |
+| 文件存储 | Supabase Storage | 云端对象存储，公私分离 |
+| 背景存储 | Supabase Storage (public) | CDN 加速直连访问 |
 | 密码 | PBKDF2-SHA256 | 10 万次迭代 + 随机盐 |
 
 ---
@@ -207,12 +236,17 @@ MAX_FILE_SIZE = 4*1024**3      # 文件大小限制（4GB）
 | `send_message` | C→S | 发送消息 |
 | `get_files` | C→S | 获取文件列表 |
 | `delete_file` | C→S | 删除文件 |
+| `get_my_rooms` | C→S | 获取我创建的房间（管理用） |
+| `delete_room` | C→S | 删除房间 |
+| `change_room_password` | C→S | 修改/添加房间密码 |
+| `remove_room_password` | C→S | 移除房间密码 |
+| `update_room_background` | C→S | 更新房间背景引用 |
 | `change_username` | C→S | 修改用户名 |
 | `reset_password` | C→S | 重置密钥 |
 | `logout` | C→S | 退出登录 |
 | `login_result` | S→C | 登录结果 |
 | `room_list` | S→C | 房间列表 |
-| `room_joined` | S→C | 加入成功（含历史消息） |
+| `room_joined` | S→C | 加入成功（含历史消息+背景） |
 | `new_message` | S→C | 新消息广播 |
 | `new_file` | S→C | 新文件广播 |
 | `online_users` | S→C | 在线成员更新 |
