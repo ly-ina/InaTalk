@@ -1,0 +1,10 @@
+[tool.pyright]
+reportAny = false
+reportExplicitAny = false
+reportUnusedCallResult = false
+reportUnknownVariableType = false
+reportUnknownMemberType = false
+reportUnknownArgumentType = false
+reportUnknownParameterType = false
+reportMissingImports = false
+

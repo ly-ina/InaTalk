@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>轻聊 - 临时 IM</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="container" id="app">
+    <!-- Header -->
+    <div class="header" id="header" style="display:none;">
+        <h1>💬 轻聊</h1>
+        <div class="user-info">
+            <span id="currentUserLabel"></span>
+            <div class="user-dropdown">
+                <button class="btn-sm btn-settings" onclick="toggleSettingsMenu()" title="设置">⚙</button>
+                <div class="dropdown-menu" id="settingsMenu">
+                    <button onclick="showChangeUsernameModal()">✏️ 修改用户名</button>
+                    <button onclick="showResetPasswordModal()">🔑 重置密钥</button>
+                </div>
+            </div>
+            <button class="btn-sm" onclick="logout()">退出</button>
+        </div>
+    </div>
+
+    <!-- 登录视图 -->
+    <div class="view active" id="loginView">
+        <div class="login-card">
+            <h2>轻聊IM</h2>
+            <p class="sub">输入唯一用户名和密钥，首次自动创建账号</p>
+            <div class="form-group">
+                <label>唯一用户名</label>
+                <input id="loginUser" type="text" placeholder="输入你的用户名" maxlength="30" autocomplete="off">
+            </div>
+            <div class="form-group">
+                <label>密钥（密码）</label>
+                <input id="loginPass" type="password" placeholder="输入密钥" autocomplete="off">
+            </div>
+            <button class="btn btn-primary" id="loginBtn" onclick="doLogin()">登 录</button>
+            <div class="error-msg" id="loginError"></div>
+            <div class="success-msg" id="loginSuccess"></div>
+        </div>
+    </div>
+
+    <!-- 大厅视图 -->
+    <div class="view" id="lobbyView">
+        <div class="lobby-content" id="lobbyContent">
+            <div class="lobby-actions">
+                <button class="btn btn-primary" onclick="showCreateRoomModal()">+ 创建房间</button>
+                <button class="btn btn-outline" onclick="showJoinRoomModal()">加入房间</button>
+            </div>
+            <div id="roomList"></div>
+        </div>
+    </div>
+
+    <!-- 聊天视图 -->
+    <div class="view" id="chatView">
+        <div class="chat-view">
+            <div class="chat-main">
+                <div class="chat-header">
+                    <div>
+                        <div class="room-title" id="chatRoomName"></div>
+                        <div class="room-id" id="chatRoomId"></div>
+                    </div>
+                    <div class="chat-header-actions">
+                        <button class="btn-header-icon file-panel-toggle" onclick="toggleFilePanel()" title="文件列表">📁</button>
+                        <button class="btn-leave" onclick="leaveRoom()">
+                            <span class="leave-icon">🚪</span> 离开房间
+                        </button>
+                    </div>
+                </div>
+                <div class="chat-messages" id="chatMessages"></div>
+                <div class="emoji-picker" id="emojiPicker"></div>
+                <div class="chat-input-area">
+                    <button class="emoji-btn" onclick="toggleEmoji()" title="表情">😊</button>
+                    <button class="emoji-btn file-upload-btn" onclick="triggerFileUpload()" title="上传文件">📎</button>
+                    <textarea id="chatInput" rows="1" placeholder="输入消息..." onkeydown="onChatKey(event)"></textarea>
+                    <button class="send-btn" id="sendBtn" onclick="sendMessage()" title="发送">➤</button>
+                </div>
+                <!-- 隐藏的文件选择器 -->
+                <input type="file" id="fileInput" style="display:none;" onchange="handleFileSelected(event)">
+                <!-- 文件面板 -->
+                <div class="file-panel" id="filePanel">
+                    <div class="file-panel-header">
+                        <span>📁 共享文件</span>
+                        <button class="file-panel-close" onclick="toggleFilePanel()">✕</button>
+                    </div>
+                    <div class="file-panel-list" id="fileListContent">
+                        <div class="file-empty">正在加载...</div>
+                    </div>
+                </div>
+            </div>
+            <div class="chat-sidebar">
+                <div class="sidebar-title">在线成员</div>
+                <div class="member-list" id="memberList"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 创建房间弹窗 -->
+<div class="modal-overlay" id="createRoomModal">
+    <div class="modal">
+        <h3>创建新房间</h3>
+        <div class="form-group">
+            <label>房间名称</label>
+            <input id="createRoomName" type="text" placeholder="输入房间名" maxlength="50">
+        </div>
+        <div class="form-group">
+            <label>房间密码（可选，留空则无密码）</label>
+            <input id="createRoomPass" type="text" placeholder="设置密码">
+        </div>
+        <div class="modal-btns">
+            <button class="btn btn-outline" onclick="closeModal('createRoomModal')">取消</button>
+            <button class="btn btn-primary" onclick="doCreateRoom()">创建</button>
+        </div>
+        <div class="error-msg" id="createRoomError"></div>
+    </div>
+</div>
+
+<!-- 加入房间弹窗 -->
+<div class="modal-overlay" id="joinRoomModal">
+    <div class="modal">
+        <h3>加入房间</h3>
+        <div class="form-group">
+            <label>房间 ID</label>
+            <input id="joinRoomId" type="text" placeholder="输入8位房间ID" maxlength="8" style="text-transform:uppercase;">
+        </div>
+        <div class="form-group">
+            <label>房间密码（如无需密码请留空）</label>
+            <input id="joinRoomPass" type="text" placeholder="输入密码">
+        </div>
+        <div class="modal-btns">
+            <button class="btn btn-outline" onclick="closeModal('joinRoomModal')">取消</button>
+            <button class="btn btn-primary" onclick="doJoinRoom()">加入</button>
+        </div>
+        <div class="error-msg" id="joinRoomError"></div>
+    </div>
+</div>
+
+<!-- 修改用户名弹窗 -->
+<div class="modal-overlay" id="changeUsernameModal">
+    <div class="modal">
+        <h3>修改用户名</h3>
+        <p style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:12px;">密钥不变，只改显示的用户名。聊天记录中的旧名字也会同步更新。</p>
+        <div class="form-group">
+            <label>新用户名</label>
+            <input id="newUsername" type="text" placeholder="输入新的用户名" maxlength="30" autocomplete="off">
+        </div>
+        <div class="form-group">
+            <label>当前密钥（验证身份）</label>
+            <input id="changeUserPass" type="password" placeholder="输入当前密钥" autocomplete="off">
+        </div>
+        <div class="modal-btns">
+            <button class="btn btn-outline" onclick="closeModal('changeUsernameModal')">取消</button>
+            <button class="btn btn-primary" onclick="doChangeUsername()">确认修改</button>
+        </div>
+        <div class="error-msg" id="changeUsernameError"></div>
+        <div class="success-msg" id="changeUsernameSuccess"></div>
+    </div>
+</div>
+
+<!-- 重置密钥弹窗 -->
+<div class="modal-overlay" id="resetPasswordModal">
+    <div class="modal">
+        <h3>重置密钥</h3>
+        <div class="form-group">
+            <label>当前密钥</label>
+            <input id="oldPassword" type="password" placeholder="输入当前密钥" autocomplete="off">
+        </div>
+        <div class="form-group">
+            <label>新密钥</label>
+            <input id="newPassword" type="password" placeholder="输入新密钥" autocomplete="off">
+        </div>
+        <div class="modal-btns">
+            <button class="btn btn-outline" onclick="closeModal('resetPasswordModal')">取消</button>
+            <button class="btn btn-primary" onclick="doResetPassword()">确认重置</button>
+        </div>
+        <div class="error-msg" id="resetPasswordError"></div>
+        <div class="success-msg" id="resetPasswordSuccess"></div>
+    </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
