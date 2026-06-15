@@ -3,7 +3,6 @@
 """
 import time
 import uuid
-from pathlib import Path
 
 from .auth import hash_password, verify_password
 from .config import REST_URL, get_client
@@ -106,14 +105,13 @@ async def delete_room(room_id: str, username: str) -> dict[str, object]:
     if row["creator"] != username:
         return {"success": False, "message": "只有房间创建者才能删除房间"}
 
-    # 删除房间背景文件
+    # 删除房间背景文件（Storage）
     bg = row.get("background")
     if bg:
-        bg_path = Path(bg) if not bg.startswith("/") else Path(bg)
-        if bg_path.exists():
-            bg_path.unlink(missing_ok=True)
+        from .files_manager import delete_background_by_url
+        await delete_background_by_url(bg)
 
-    # 删除房间文件
+    # 删除房间所有聊天文件
     await delete_room_files(room_id)
     # 删除房间关联的消息
     await client.delete(f"{REST_URL}/messages?room_id=eq.{room_id}")
@@ -210,9 +208,8 @@ async def update_room_background(
     # 如果有旧背景文件，清理掉
     old_bg = row.get("background")
     if old_bg and old_bg != background_url:
-        old_path = Path(old_bg)
-        if old_path.exists():
-            old_path.unlink(missing_ok=True)
+        from .files_manager import delete_background_by_url
+        await delete_background_by_url(old_bg)
 
     await client.patch(
         f"{REST_URL}/rooms?id=eq.{room_id}",

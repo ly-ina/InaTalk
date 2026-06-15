@@ -2,14 +2,22 @@
 HTTP 路由：文件上传/下载、健康检查、静态资源、CORS 中间件
 """
 import mimetypes
-import uuid
 from pathlib import Path
 from typing import Any
 
 from aiohttp import web
 
-from .config import BACKGROUND_DIR, FILE_RETENTION, MAX_FILE_SIZE, REST_URL, STATIC_DIR, UPLOAD_DIR, get_client
-from .files_manager import save_file_metadata
+from .config import (
+    FILE_RETENTION, MAX_BG_SIZE, MAX_FILE_SIZE, REST_URL,
+    STATIC_DIR, get_client,
+)
+from .files_manager import (
+    delete_background_by_url,
+    get_file_download_url,
+    save_file_metadata,
+    upload_background_to_storage,
+    upload_file_to_storage,
+)
 from .websocket import broadcast_to_room, ws_handler
 
 
@@ -47,65 +55,52 @@ async def handle_upload(request: web.Request) -> web.Response:
 
     # 检查房间是否存在
     client = get_client()
-    url = f"{REST_URL}/rooms?select=id&id=eq.{room_id}"
-    resp = await client.get(url)
+    resp = await client.get(f"{REST_URL}/rooms?select=id&id=eq.{room_id}")
     if not resp.json():
         return web.json_response({"success": False, "message": "房间不存在"}, status=404)
 
-    # 准备存储
-    room_dir = UPLOAD_DIR / room_id
-    room_dir.mkdir(parents=True, exist_ok=True)
-
-    file_uuid = uuid.uuid4().hex[:8]
-    safe_filename = f"{file_uuid}_{filename}"
-    file_path = room_dir / safe_filename
-
-    # 读取文件内容
-    size = 0
+    # 读取文件到内存
     _read_chunk = getattr(field, "read_chunk")
-    with open(file_path, "wb") as f:
-        while True:
-            chunk = await _read_chunk(1024 * 1024)  # 1MB chunks
-            if not chunk:
-                break
-            size += len(chunk)
-            if size > MAX_FILE_SIZE:
-                f.close()
-                file_path.unlink()
-                return web.json_response(
-                    {"success": False, "message": f"文件超过最大限制 {MAX_FILE_SIZE // (1024**3)}GB"},
-                    status=413,
-                )
-            f.write(chunk)
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        chunk = await _read_chunk(1024 * 1024)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > MAX_FILE_SIZE:
+            return web.json_response(
+                {"success": False, "message": f"文件超过最大限制 {MAX_FILE_SIZE // (1024**2)}MB"},
+                status=413,
+            )
+        chunks.append(chunk)
+    data = b"".join(chunks)
 
     # 获取 MIME 类型
     file_type, _ = mimetypes.guess_type(filename)
     file_type = file_type or "application/octet-stream"
 
-    # 保存元数据到 Supabase
     try:
+        # 上传到 Supabase Storage
+        storage_key = await upload_file_to_storage(room_id, filename, data, file_type)
+        # 保存元数据
         meta = await save_file_metadata(
             room_id=room_id,
             filename=filename,
-            file_size=size,
+            file_size=total,
             file_type=file_type,
             uploaded_by=uploader,
             retention=retention,
-            storage_path=str(file_path),
+            storage_key=storage_key,
         )
     except Exception as e:
-        file_path.unlink(missing_ok=True)
-        print(f"[文件] 元数据保存失败，已清理磁盘文件: {e}")
-        return web.json_response(
-            {"success": False, "message": f"文件元数据保存失败，请确认 Supabase 中已创建 files 表"},
-            status=500,
-        )
+        print(f"[文件] 上传失败: {e}")
+        return web.json_response({"success": False, "message": f"文件上传失败: {e}"}, status=500)
 
-    print(f"[文件] 上传成功: {filename} ({size} bytes) -> 房间 {room_id}")
+    print(f"[文件] 上传成功: {filename} ({total} bytes) -> 房间 {room_id}")
 
-    # 通过 WebSocket 广播文件消息到房间
-    file_msg: dict[str, object] = {"type": "new_file", "file": meta}
-    await broadcast_to_room(room_id, file_msg)
+    # 通过 WebSocket 广播
+    await broadcast_to_room(room_id, {"type": "new_file", "file": meta})
 
     return web.json_response({"success": True, "file": meta})
 
@@ -115,31 +110,28 @@ async def handle_download(request: web.Request) -> web.Response:
     file_id = request.match_info.get("file_id", "")
 
     client = get_client()
-    url = f"{REST_URL}/files?select=*&id=eq.{file_id}"
-    resp = await client.get(url)
+    resp = await client.get(f"{REST_URL}/files?select=*&id=eq.{file_id}")
     rows = resp.json()
     if not isinstance(rows, list) or not rows:
         return web.json_response({"success": False, "message": "文件不存在"}, status=404)
 
     file_info = rows[0]
-    storage_path = file_info.get("storage_path", "")
-    file_path = Path(storage_path)
+    storage_key = file_info.get("storage_path", "")
+    if not storage_key:
+        return web.json_response({"success": False, "message": "文件路径无效"}, status=404)
 
-    if not file_path.exists():
-        return web.json_response({"success": False, "message": "文件已被删除"}, status=404)
+    try:
+        signed_url = await get_file_download_url(storage_key)
+    except Exception as e:
+        return web.json_response({"success": False, "message": f"获取下载链接失败: {e}"}, status=500)
 
-    return web.FileResponse(
-        path=file_path,
-        headers={
-            "Content-Disposition": f'attachment; filename="{file_info["filename"]}"',
-            "Content-Type": file_info.get("file_type", "application/octet-stream"),
-        },
-    )
+    # 重定向到签名 URL
+    raise web.HTTPFound(signed_url)
 
 
 # ============ 房间背景上传 ============
 async def handle_background_upload(request: web.Request) -> web.Response:
-    """上传房间背景图片"""
+    """上传房间背景图片 → Supabase Storage"""
     reader = await request.multipart()
     field = await reader.next()
     if field is None or getattr(field, "name", None) != "file":
@@ -156,8 +148,7 @@ async def handle_background_upload(request: web.Request) -> web.Response:
 
     # 验证房间存在且操作者是创建者
     client = get_client()
-    check_url = f"{REST_URL}/rooms?select=id,creator&id=eq.{room_id}"
-    resp = await client.get(check_url)
+    resp = await client.get(f"{REST_URL}/rooms?select=id,creator,background&id=eq.{room_id}")
     rows = resp.json()
     if not rows:
         return web.json_response({"success": False, "message": "房间不存在"}, status=404)
@@ -173,57 +164,44 @@ async def handle_background_upload(request: web.Request) -> web.Response:
             status=400,
         )
 
-    BACKGROUND_DIR.mkdir(parents=True, exist_ok=True)
-    file_uuid = uuid.uuid4().hex[:8]
-    safe_filename = f"{room_id}_{file_uuid}{ext}"
-    file_path = BACKGROUND_DIR / safe_filename
-
+    # 读取文件到内存
     _read_chunk = getattr(field, "read_chunk")
-    size = 0
-    max_bg_size = 10 * 1024 * 1024  # 10MB
-    with open(file_path, "wb") as f:
-        while True:
-            chunk = await _read_chunk(1024 * 1024)
-            if not chunk:
-                break
-            size += len(chunk)
-            if size > max_bg_size:
-                f.close()
-                file_path.unlink()
-                return web.json_response(
-                    {"success": False, "message": "背景图片不能超过 10MB"},
-                    status=413,
-                )
-            f.write(chunk)
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        chunk = await _read_chunk(1024 * 1024)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > MAX_BG_SIZE:
+            return web.json_response({"success": False, "message": "背景图片不能超过 10MB"}, status=413)
+        chunks.append(chunk)
+    data = b"".join(chunks)
 
-    # 生成访问 URL
-    bg_url = f"/api/background/{safe_filename}"
-
-    # 清理旧背景
-    old_bg_url = f"{REST_URL}/rooms?select=background&id=eq.{room_id}"
-    old_resp = await client.get(old_bg_url)
-    old_rows = old_resp.json()
-    if old_rows:
-        old_bg = old_rows[0].get("background")
+    try:
+        # 清理旧背景
+        old_bg = rows[0].get("background")
         if old_bg:
-            old_file = BACKGROUND_DIR / Path(old_bg).name
-            if old_file.exists():
-                old_file.unlink(missing_ok=True)
+            await delete_background_by_url(old_bg)
 
-    # 更新数据库
-    await client.patch(
-        f"{REST_URL}/rooms?id=eq.{room_id}",
-        json={"background": bg_url},
-    )
+        # 上传新背景到 Storage
+        bg_url = await upload_background_to_storage(room_id, data, ext)
 
-    print(f"[背景] 房间 {room_id} 背景已更新: {safe_filename}")
+        # 更新数据库
+        await client.patch(
+            f"{REST_URL}/rooms?id=eq.{room_id}",
+            json={"background": bg_url},
+        )
+    except Exception as e:
+        return web.json_response({"success": False, "message": f"背景上传失败: {e}"}, status=500)
+
+    print(f"[背景] 房间 {room_id} 背景已更新")
 
     return web.json_response({
         "success": True,
         "message": "背景上传成功",
         "room_id": room_id,
         "background": bg_url,
-        "filename": safe_filename,
     })
 
 
@@ -235,24 +213,21 @@ async def handle_health(_request: web.Request) -> web.Response:
 # ============ 应用工厂 ============
 def create_app() -> web.Application:
     """创建并配置 aiohttp Application"""
-    app = web.Application(client_max_size=MAX_FILE_SIZE, middlewares=[cors_middleware])
+    app = web.Application(client_max_size=MAX_FILE_SIZE * 2, middlewares=[cors_middleware])
 
-    # WebSocket（必须在静态路由前注册）
+    # WebSocket
     app.router.add_route("GET", "/ws", ws_handler)
 
-    # API（必须在静态路由前注册）
+    # API
     app.router.add_route("POST", "/api/upload", handle_upload)
     app.router.add_route("POST", "/api/upload_background", handle_background_upload)
     app.router.add_route("GET", "/api/files/{file_id}", handle_download)
     app.router.add_route("GET", "/api/health", handle_health)
 
-    # 静态文件（兜底，API/WS 未匹配的请求由 static/ 目录响应）
-    # 显式注册 index.html，避免目录列表
+    # 静态文件
     app.router.add_route("GET", "/", _serve_static(STATIC_DIR / "index.html"))
-    # 静态资源目录（禁用目录列表）
     app.router.add_static("/css", STATIC_DIR / "css", show_index=False)
     app.router.add_static("/js", STATIC_DIR / "js", show_index=False)
-    app.router.add_static("/api/background", BACKGROUND_DIR, show_index=False)
     return app
 
 

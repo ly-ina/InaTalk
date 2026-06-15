@@ -8,20 +8,17 @@ import sys
 
 from aiohttp import web
 
-from src.config import HOST, PORT, MAX_FILE_SIZE, MAX_MSG_PER_ROOM, ROOM_EXPIRE_DAYS, FILE_RETENTION, UPLOAD_DIR, BACKGROUND_DIR, SUPABASE_URL
+from src.config import HOST, PORT, MAX_FILE_SIZE, MAX_MSG_PER_ROOM, ROOM_EXPIRE_DAYS, FILE_RETENTION, SUPABASE_URL
 from src.cleanup import cleanup_expired_rooms, cleanup_scheduler
 from src.files_manager import ensure_files_table, cleanup_expired_files
 from src.routes import create_app
 
 
 async def main():
-    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-    BACKGROUND_DIR.mkdir(parents=True, exist_ok=True)
-
     print(f"[服务] 数据库: Supabase ({SUPABASE_URL})")
     print(f"[服务] 房间过期时间: {ROOM_EXPIRE_DAYS} 天")
     print(f"[服务] 每房间消息上限: {MAX_MSG_PER_ROOM} 条")
-    print(f"[服务] 文件大小限制: {MAX_FILE_SIZE // (1024**3)}GB")
+    print(f"[服务] 文件大小限制: {MAX_FILE_SIZE // (1024**2)}MB")
     print(f"[服务] 文件保留选项: {', '.join(FILE_RETENTION.keys())}")
 
     await ensure_files_table()
@@ -48,9 +45,9 @@ def run_dev():
 
     print("[热更新] 已启用，修改 .py/.html/.css/.js 文件将自动重启...")
     run_process(
-        ".",                                    # 监听项目根目录
-        target=f"{sys.executable} main.py",     # 使用当前 Python 解释器重启
-        watch_filter=lambda _, path: (          # 只监听源码和前端文件
+        ".",
+        target=f"{sys.executable} main.py",
+        watch_filter=lambda _, path: (
             path.endswith(".py") or
             path.endswith(".html") or
             path.endswith(".css") or

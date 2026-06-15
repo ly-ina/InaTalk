@@ -11,7 +11,7 @@ async function handleFileSelected(e) {
     const file = e.target.files[0];
     if (!file || !currentRoom || !currentUser) return;
 
-    const maxSize = 4 * 1024 * 1024 * 1024; // 4GB
+    const maxSize = 50 * 1024 * 1024; // 50MB
     if (file.size > maxSize) {
         alert('文件大小超过 4GB 限制');
         return;
