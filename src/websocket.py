@@ -10,7 +10,7 @@ from .auth import change_username, create_or_login_user, reset_password
 from .config import PORT
 from .files_manager import delete_file_record, get_room_files
 from .messages import get_room_messages, save_message
-from .rooms import create_room, get_all_rooms, join_room
+from .rooms import create_room, delete_room, get_all_rooms, join_room
 
 # ============ 在线状态 ============
 online_users: dict[str, set[Any]] = {}
@@ -236,6 +236,38 @@ async def ws_handler(request: web.Request) -> web.WebSocketResponse:
                     "file_id": file_id,
                 })
                 await send({"type": "delete_file_result", "success": True, "file_id": file_id})
+
+            # --- 获取用户创建的房间 ---
+            elif msg_type == "get_my_rooms":
+                if not current_user:
+                    await send({"type": "error", "message": "请先登录"})
+                    continue
+                rooms = await get_all_rooms()
+                my_rooms = [r for r in rooms if r.get("creator") == current_user]
+                await send({"type": "my_rooms_list", "rooms": my_rooms})
+
+            # --- 删除房间 ---
+            elif msg_type == "delete_room":
+                if not current_user:
+                    await send({"type": "error", "message": "请先登录"})
+                    continue
+                room_id = (msg.get("room_id") or "").strip().upper()
+                if not room_id:
+                    await send({"type": "delete_room_result", "success": False, "message": "房间ID不能为空"})
+                    continue
+                result = await delete_room(room_id, current_user)
+                if result["success"]:
+                    # 清理在线状态
+                    members = room_members.pop(room_id, set())
+                    for member in members:
+                        await broadcast_to_room(room_id, {
+                            "type": "system",
+                            "content": "⚠️ 房间已被创建者删除",
+                        })
+                    # 如果当前用户在该房间中，清除 current_room
+                    if current_room == room_id:
+                        current_room = None
+                await send({"type": "delete_room_result", **result})
 
             # --- 退出登录 ---
             elif msg_type == "logout":

@@ -558,3 +558,89 @@ body {
     opacity: 1;
     background: #fee2e2;
 }
+
+/* ============ 房间搜索 ============ */
+.modal-wide { max-width: 480px !important; }
+
+.room-search-list {
+    max-height: 280px;
+    overflow-y: auto;
+    margin-bottom: 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+}
+
+.room-search-item {
+    padding: 12px 14px;
+    cursor: pointer;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: background .12s;
+}
+
+.room-search-item:last-child { border-bottom: none; }
+
+.room-search-item:hover { background: #f0f4ff; }
+
+.room-search-item .room-search-name {
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.room-search-item .room-search-meta {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.room-search-item .room-search-badge {
+    font-size: 0.7rem;
+    padding: 2px 8px;
+    background: var(--border);
+    border-radius: 4px;
+    color: var(--text-secondary);
+    font-family: monospace;
+}
+
+/* ============ 删除房间 ============ */
+.delete-room-list { max-height: 300px; overflow-y: auto; }
+
+.delete-room-item {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.delete-room-item:last-child { border-bottom: none; }
+
+.delete-room-item .delete-room-info { flex: 1; min-width: 0; }
+
+.delete-room-item .delete-room-name {
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.delete-room-item .delete-room-id {
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    font-family: monospace;
+}
+
+.btn-danger {
+    background: var(--danger);
+    color: #fff;
+    border: none;
+    padding: 6px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.78rem;
+    font-weight: 500;
+    white-space: nowrap;
+    transition: opacity .15s;
+}
+
+.btn-danger:hover { opacity: 0.85; }

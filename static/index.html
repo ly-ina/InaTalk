@@ -19,6 +19,7 @@
                 <div class="dropdown-menu" id="settingsMenu">
                     <button onclick="showChangeUsernameModal()">✏️ 修改用户名</button>
                     <button onclick="showResetPasswordModal()">🔑 重置密钥</button>
+                    <button onclick="showDeleteRoomModal()">🗑️ 删除我的房间</button>
                 </div>
             </div>
             <button class="btn-sm" onclick="logout()">退出</button>
@@ -122,19 +123,16 @@
 
 <!-- 加入房间弹窗 -->
 <div class="modal-overlay" id="joinRoomModal">
-    <div class="modal">
+    <div class="modal modal-wide">
         <h3>加入房间</h3>
         <div class="form-group">
-            <label>房间 ID</label>
-            <input id="joinRoomId" type="text" placeholder="输入8位房间ID" maxlength="8" style="text-transform:uppercase;">
+            <input id="joinRoomSearch" type="text" placeholder="搜索房间名或 ID..." oninput="searchRooms()">
         </div>
-        <div class="form-group">
-            <label>房间密码（如无需密码请留空）</label>
-            <input id="joinRoomPass" type="text" placeholder="输入密码">
+        <div class="room-search-list" id="roomSearchList">
+            <div class="room-empty">输入关键词搜索房间...</div>
         </div>
         <div class="modal-btns">
             <button class="btn btn-outline" onclick="closeModal('joinRoomModal')">取消</button>
-            <button class="btn btn-primary" onclick="doJoinRoom()">加入</button>
         </div>
         <div class="error-msg" id="joinRoomError"></div>
     </div>
@@ -180,6 +178,41 @@
         </div>
         <div class="error-msg" id="resetPasswordError"></div>
         <div class="success-msg" id="resetPasswordSuccess"></div>
+    </div>
+</div>
+
+<!-- 加密房间密码弹窗 -->
+<div class="modal-overlay" id="roomPasswordModal">
+    <div class="modal">
+        <h3>🔒 房间已加密</h3>
+        <p style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:12px;">
+            房间 <strong id="roomPassTargetName">-</strong> 需要密码才能进入
+        </p>
+        <div class="form-group">
+            <input id="roomPassInput" type="text" placeholder="输入房间密码" autocomplete="off">
+        </div>
+        <div class="modal-btns">
+            <button class="btn btn-outline" onclick="closeModal('roomPasswordModal')">取消</button>
+            <button class="btn btn-primary" onclick="confirmRoomPassword()">进入</button>
+        </div>
+        <div class="error-msg" id="roomPassError"></div>
+    </div>
+</div>
+
+<!-- 删除房间弹窗 -->
+<div class="modal-overlay" id="deleteRoomModal">
+    <div class="modal modal-wide">
+        <h3>删除我的房间</h3>
+        <p style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:14px;">
+            仅显示你创建的房间，删除后不可恢复
+        </p>
+        <div class="delete-room-list" id="deleteRoomList">
+            <div class="room-empty">加载中...</div>
+        </div>
+        <div class="modal-btns">
+            <button class="btn btn-outline" onclick="closeModal('deleteRoomModal')">关闭</button>
+        </div>
+        <div class="error-msg" id="deleteRoomError"></div>
     </div>
 </div>
 

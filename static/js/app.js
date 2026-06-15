@@ -74,7 +74,8 @@ function handleMessage(msg) {
             }
             break;
         case 'room_list':
-            renderRoomList(msg.rooms);
+            allRoomsCache = msg.rooms || [];
+            renderRoomList(allRoomsCache);
             break;
         case 'create_room_result':
             if (msg.success) {
@@ -173,6 +174,25 @@ function handleMessage(msg) {
             break;
         case 'delete_file_result':
             break;
+        case 'my_rooms_list':
+            renderMyRooms(msg.rooms || []);
+            break;
+        case 'delete_room_result':
+            if (msg.success) {
+                document.getElementById('deleteRoomError').textContent = '';
+                // 刷新我的房间列表和公共房间列表
+                send({ type: 'get_my_rooms' });
+                refreshRooms();
+                // 如果当前在被删除的房间中，返回大厅
+                if (currentRoom && currentRoom.id === msg.room_id) {
+                    currentRoom = null;
+                    showView('lobby');
+                    refreshRooms();
+                }
+            } else {
+                document.getElementById('deleteRoomError').textContent = msg.message;
+            }
+            break;
     }
 }
 
@@ -234,7 +254,7 @@ function renderRoomList(rooms) {
         return;
     }
     el.innerHTML = rooms.map(r => `
-        <div class="room-card" onclick="joinRoomById('${r.id}')">
+        <div class="room-card" onclick="clickRoom('${r.id}', '${escHtml(r.name)}', ${r.has_password})">
             <div class="room-info">
                 <div class="room-name">${escHtml(r.name)} ${r.has_password ? '🔒' : ''}</div>
                 <div class="room-meta">创建者: ${escHtml(r.creator)}</div>
@@ -242,6 +262,15 @@ function renderRoomList(rooms) {
             <span class="room-badge">${r.id}</span>
         </div>
     `).join('');
+}
+
+// ============ 点击房间（大厅列表） ============
+function clickRoom(roomId, roomName, hasPassword) {
+    if (hasPassword) {
+        promptRoomPassword(roomId, roomName);
+    } else {
+        joinRoomById(roomId, '');
+    }
 }
 
 // ============ 创建房间 ============
@@ -261,26 +290,95 @@ function doCreateRoom() {
 }
 
 // ============ 加入房间 ============
+let allRoomsCache = [];
+
 function showJoinRoomModal() {
-    document.getElementById('joinRoomId').value = '';
-    document.getElementById('joinRoomPass').value = '';
+    document.getElementById('joinRoomSearch').value = '';
     document.getElementById('joinRoomError').textContent = '';
+    document.getElementById('roomSearchList').innerHTML = '<div class="room-empty">输入关键词搜索房间...</div>';
     document.getElementById('joinRoomModal').classList.add('active');
-    document.getElementById('joinRoomId').focus();
+    // 后台拉取房间数据
+    send({ type: 'get_rooms' });
+    document.getElementById('joinRoomSearch').focus();
 }
 
-function doJoinRoom() {
-    const roomId = document.getElementById('joinRoomId').value.trim().toUpperCase();
-    const pass = document.getElementById('joinRoomPass').value.trim();
-    if (!roomId) { document.getElementById('joinRoomError').textContent = '房间ID不能为空'; return; }
-    joinRoomById(roomId, pass);
+function searchRooms() {
+    const query = document.getElementById('joinRoomSearch').value.trim().toLowerCase();
+    if (!query) {
+        document.getElementById('roomSearchList').innerHTML = '<div class="room-empty">输入关键词搜索房间...</div>';
+        return;
+    }
+    const filtered = allRoomsCache.filter(r =>
+        r.id.toLowerCase().includes(query) ||
+        r.name.toLowerCase().includes(query)
+    );
+    renderSearchResults(filtered);
+}
+
+function renderSearchResults(rooms) {
+    const el = document.getElementById('roomSearchList');
+    if (!rooms.length) {
+        el.innerHTML = '<div class="room-empty">没有匹配的房间</div>';
+        return;
+    }
+    el.innerHTML = rooms.map(r => `
+        <div class="room-search-item" onclick="clickRoomFromSearch('${r.id}', '${escHtml(r.name)}', ${r.has_password})">
+            <div>
+                <div class="room-search-name">${escHtml(r.name)} ${r.has_password ? '🔒' : ''}</div>
+                <div class="room-search-meta">创建者: ${escHtml(r.creator)}</div>
+            </div>
+            <span class="room-search-badge">${r.id}</span>
+        </div>
+    `).join('');
+}
+
+function clickRoomFromSearch(roomId, roomName, hasPassword) {
+    if (hasPassword) {
+        promptRoomPassword(roomId, roomName);
+    } else {
+        joinRoomById(roomId, '');
+    }
 }
 
 function joinRoomById(roomId, pass) {
     send({ type: 'join_room', room_id: roomId, password: pass || '' });
     closeModal('joinRoomModal');
     closeModal('createRoomModal');
+    closeModal('roomPasswordModal');
 }
+
+// ============ 密码弹窗 ============
+let pendingRoomId = '';
+let pendingRoomName = '';
+
+function promptRoomPassword(roomId, roomName) {
+    pendingRoomId = roomId;
+    pendingRoomName = roomName;
+    document.getElementById('roomPassTargetName').textContent = roomName;
+    document.getElementById('roomPassInput').value = '';
+    document.getElementById('roomPassError').textContent = '';
+    document.getElementById('roomPasswordModal').classList.add('active');
+    document.getElementById('roomPassInput').focus();
+}
+
+function confirmRoomPassword() {
+    const pass = document.getElementById('roomPassInput').value.trim();
+    if (!pass) {
+        document.getElementById('roomPassError').textContent = '请输入房间密码';
+        return;
+    }
+    joinRoomById(pendingRoomId, pass);
+}
+
+// 密码弹窗回车确认
+document.addEventListener('DOMContentLoaded', function() {
+    const passInput = document.getElementById('roomPassInput');
+    if (passInput) {
+        passInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') confirmRoomPassword();
+        });
+    }
+});
 
 // ============ 离开房间 ============
 function leaveRoom() {
@@ -432,6 +530,38 @@ function doResetPassword() {
     if (!oldPw) { document.getElementById('resetPasswordError').textContent = '当前密钥不能为空'; return; }
     if (!newPw) { document.getElementById('resetPasswordError').textContent = '新密钥不能为空'; return; }
     send({ type: 'reset_password', old_password: oldPw, new_password: newPw });
+}
+
+// ============ 房间管理（删除） ============
+function showDeleteRoomModal() {
+    document.getElementById('settingsMenu').classList.remove('active');
+    document.getElementById('deleteRoomError').textContent = '';
+    document.getElementById('deleteRoomList').innerHTML = '<div class="room-empty">加载中...</div>';
+    document.getElementById('deleteRoomModal').classList.add('active');
+    send({ type: 'get_my_rooms' });
+}
+
+function renderMyRooms(rooms) {
+    const el = document.getElementById('deleteRoomList');
+    if (!rooms.length) {
+        el.innerHTML = '<div class="room-empty">你还没有创建过房间</div>';
+        return;
+    }
+    el.innerHTML = rooms.map(r => `
+        <div class="delete-room-item">
+            <div class="delete-room-info">
+                <div class="delete-room-name">${escHtml(r.name)} ${r.has_password ? '🔒' : ''}</div>
+                <div class="delete-room-id">ID: ${r.id}</div>
+            </div>
+            <button class="btn-danger" onclick="doDeleteRoom('${r.id}', '${escHtml(r.name)}')">删除</button>
+        </div>
+    `).join('');
+}
+
+function doDeleteRoom(roomId, roomName) {
+    if (!confirm(`确定要删除房间 "${roomName}" (${roomId}) 吗？\n\n删除后不可恢复！`)) return;
+    document.getElementById('deleteRoomError').textContent = '';
+    send({ type: 'delete_room', room_id: roomId });
 }
 
 // ============ 文件上传 ============
