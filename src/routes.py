@@ -8,7 +8,7 @@ from typing import Any
 
 from aiohttp import web
 
-from .config import FILE_RETENTION, MAX_FILE_SIZE, REST_URL, STATIC_DIR, UPLOAD_DIR, get_client
+from .config import BACKGROUND_DIR, FILE_RETENTION, MAX_FILE_SIZE, REST_URL, STATIC_DIR, UPLOAD_DIR, get_client
 from .files_manager import save_file_metadata
 from .websocket import broadcast_to_room, ws_handler
 
@@ -137,6 +137,96 @@ async def handle_download(request: web.Request) -> web.Response:
     )
 
 
+# ============ 房间背景上传 ============
+async def handle_background_upload(request: web.Request) -> web.Response:
+    """上传房间背景图片"""
+    reader = await request.multipart()
+    field = await reader.next()
+    if field is None or getattr(field, "name", None) != "file":
+        return web.json_response({"success": False, "message": "缺少文件字段"}, status=400)
+
+    filename = getattr(field, "filename", None) or "background"
+    room_id = request.query.get("room_id", "").strip().upper()
+    username = request.query.get("username", "").strip()
+
+    if not room_id:
+        return web.json_response({"success": False, "message": "缺少 room_id"}, status=400)
+    if not username:
+        return web.json_response({"success": False, "message": "缺少 username"}, status=400)
+
+    # 验证房间存在且操作者是创建者
+    client = get_client()
+    check_url = f"{REST_URL}/rooms?select=id,creator&id=eq.{room_id}"
+    resp = await client.get(check_url)
+    rows = resp.json()
+    if not rows:
+        return web.json_response({"success": False, "message": "房间不存在"}, status=404)
+    if rows[0]["creator"] != username:
+        return web.json_response({"success": False, "message": "只有房间创建者才能管理背景"}, status=403)
+
+    # 检查文件类型
+    ext = Path(filename).suffix.lower()
+    allowed_exts = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"}
+    if ext not in allowed_exts:
+        return web.json_response(
+            {"success": False, "message": f"不支持的图片格式，支持: {', '.join(allowed_exts)}"},
+            status=400,
+        )
+
+    BACKGROUND_DIR.mkdir(parents=True, exist_ok=True)
+    file_uuid = uuid.uuid4().hex[:8]
+    safe_filename = f"{room_id}_{file_uuid}{ext}"
+    file_path = BACKGROUND_DIR / safe_filename
+
+    _read_chunk = getattr(field, "read_chunk")
+    size = 0
+    max_bg_size = 10 * 1024 * 1024  # 10MB
+    with open(file_path, "wb") as f:
+        while True:
+            chunk = await _read_chunk(1024 * 1024)
+            if not chunk:
+                break
+            size += len(chunk)
+            if size > max_bg_size:
+                f.close()
+                file_path.unlink()
+                return web.json_response(
+                    {"success": False, "message": "背景图片不能超过 10MB"},
+                    status=413,
+                )
+            f.write(chunk)
+
+    # 生成访问 URL
+    bg_url = f"/api/background/{safe_filename}"
+
+    # 清理旧背景
+    old_bg_url = f"{REST_URL}/rooms?select=background&id=eq.{room_id}"
+    old_resp = await client.get(old_bg_url)
+    old_rows = old_resp.json()
+    if old_rows:
+        old_bg = old_rows[0].get("background")
+        if old_bg:
+            old_file = BACKGROUND_DIR / Path(old_bg).name
+            if old_file.exists():
+                old_file.unlink(missing_ok=True)
+
+    # 更新数据库
+    await client.patch(
+        f"{REST_URL}/rooms?id=eq.{room_id}",
+        json={"background": bg_url},
+    )
+
+    print(f"[背景] 房间 {room_id} 背景已更新: {safe_filename}")
+
+    return web.json_response({
+        "success": True,
+        "message": "背景上传成功",
+        "room_id": room_id,
+        "background": bg_url,
+        "filename": safe_filename,
+    })
+
+
 # ============ 健康检查 ============
 async def handle_health(_request: web.Request) -> web.Response:
     return web.json_response({"status": "ok"})
@@ -152,6 +242,7 @@ def create_app() -> web.Application:
 
     # API（必须在静态路由前注册）
     app.router.add_route("POST", "/api/upload", handle_upload)
+    app.router.add_route("POST", "/api/upload_background", handle_background_upload)
     app.router.add_route("GET", "/api/files/{file_id}", handle_download)
     app.router.add_route("GET", "/api/health", handle_health)
 
@@ -161,6 +252,7 @@ def create_app() -> web.Application:
     # 静态资源目录（禁用目录列表）
     app.router.add_static("/css", STATIC_DIR / "css", show_index=False)
     app.router.add_static("/js", STATIC_DIR / "js", show_index=False)
+    app.router.add_static("/api/background", BACKGROUND_DIR, show_index=False)
     return app
 
 

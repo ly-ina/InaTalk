@@ -13,6 +13,7 @@ venv/
 
 # 用户上传的文件
 uploads/
+backgrounds/
 
 # IDE
 .vscode/

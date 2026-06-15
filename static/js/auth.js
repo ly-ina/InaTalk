@@ -8,8 +8,8 @@ function doLogin() {
     if (!user || !pass) { errEl.textContent = '用户名和密钥不能为空'; return; }
     btn.disabled = true;
     btn.textContent = '登录中...';
-    sessionStorage.setItem('im_user', user);
-    sessionStorage.setItem('im_pass', pass);
+    localStorage.setItem('im_user', user);
+    localStorage.setItem('im_pass', pass);
     connectWS();
     const tryLogin = () => {
         if (ws && ws.readyState === WebSocket.OPEN) {
@@ -32,8 +32,8 @@ document.getElementById('loginPass').addEventListener('keydown', (e) => {
 // ============ 退出 ============
 function logout() {
     send({ type: 'logout' });
-    sessionStorage.removeItem('im_user');
-    sessionStorage.removeItem('im_pass');
+    localStorage.removeItem('im_user');
+    localStorage.removeItem('im_pass');
     currentUser = null;
     currentRoom = null;
     showView('login');

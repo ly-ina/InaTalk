@@ -4,7 +4,6 @@
 import hashlib
 import secrets
 import time
-from typing import Any
 
 from .config import REST_URL, get_client
 

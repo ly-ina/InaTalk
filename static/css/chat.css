@@ -18,7 +18,7 @@
 
 .chat-sidebar .member-item {
     padding: 6px 10px; border-radius: 6px; font-size: 0.83rem;
-    display: flex; align-items: center; gap: 6px;
+    display: flex; align-items: center; gap: 6px; font-weight: 600;
 }
 
 .chat-sidebar .member-dot {
@@ -32,9 +32,15 @@
     background: #fafbfc; flex-shrink: 0;
 }
 
-.chat-header .room-title { font-weight: 600; font-size: 0.95rem; }
+.chat-header .room-title {
+    font-weight: 800; font-size: 1rem; color: var(--text);
+    text-shadow: 0 1px 2px rgba(255,255,255,0.6);
+}
 
-.chat-header .room-id { font-size: 0.75rem; color: var(--text-secondary); }
+.chat-header .room-id {
+    font-size: 0.75rem; color: var(--text-secondary);
+    font-weight: 600;
+}
 
 .chat-header-actions { display: flex; align-items: center; gap: 8px; }
 
@@ -71,6 +77,20 @@
     display: flex; flex-direction: column; gap: 4px;
 }
 
+/* 房间背景图 */
+.chat-messages.has-background {
+    background-blend-mode: overlay;
+}
+
+.chat-messages.has-background .msg-bubble {
+    background-color: rgba(255, 255, 255, 0.85);
+}
+
+.chat-messages.has-background .msg-row.self .msg-bubble {
+    background-color: rgba(79, 110, 247, 0.88);
+    color: #fff;
+}
+
 .msg-row { display: flex; margin-bottom: 6px; }
 
 .msg-row.self { justify-content: flex-end; }
@@ -86,9 +106,13 @@
 
 .msg-row.other .msg-bubble { background: var(--bubble-other); border-bottom-left-radius: 4px; }
 
-.msg-user { font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 2px; padding: 0 4px; }
+.msg-user {
+    font-size: 0.75rem; color: #374151; font-weight: 700;
+    margin-bottom: 3px; padding: 0 4px;
+    text-shadow: 0 0 4px rgba(255,255,255,0.9);
+}
 
-.msg-row.self .msg-user { text-align: right; }
+.msg-row.self .msg-user { text-align: right; color: #fff; text-shadow: 0 0 4px rgba(0,0,0,0.4); }
 
 .msg-emoji .msg-bubble { font-size: 2.2rem; background: transparent !important; padding: 2px 4px; }
 

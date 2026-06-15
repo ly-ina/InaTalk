@@ -21,6 +21,7 @@ MAX_FILE_SIZE = 4 * 1024 * 1024 * 1024  # 4GB
 # 项目根目录（src/config.py → src → 项目根）
 ROOT_DIR = Path(__file__).parent.parent
 UPLOAD_DIR = ROOT_DIR / "uploads"
+BACKGROUND_DIR = ROOT_DIR / "backgrounds"
 STATIC_DIR = ROOT_DIR / "static"
 
 # 文件保留时长映射（秒）

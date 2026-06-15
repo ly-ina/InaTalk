@@ -52,7 +52,41 @@
     border-radius: 4px; color: var(--text-secondary); font-family: monospace;
 }
 
-/* ============ 删除房间 ============ */
+/* ============ 房间管理 ============ */
+.modal-manage { max-width: 520px !important; }
+
+.manage-room-list { max-height: 350px; overflow-y: auto; }
+
+.manage-room-item {
+    padding: 12px 14px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+}
+
+.manage-room-item:last-child { border-bottom: none; }
+
+.manage-room-item .manage-room-info { flex: 1; min-width: 0; }
+
+.manage-room-item .manage-room-name { font-weight: 600; font-size: 0.9rem; }
+
+.manage-room-item .manage-room-id { font-size: 0.7rem; color: var(--text-secondary); font-family: monospace; }
+
+.manage-room-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+.btn-manage {
+    width: 34px; height: 34px; border-radius: 8px; border: 1.5px solid var(--border);
+    background: #fff; cursor: pointer; font-size: 1rem; display: flex;
+    align-items: center; justify-content: center; transition: all .15s; padding: 0;
+}
+
+.btn-manage:hover { transform: scale(1.08); }
+
+.btn-manage.btn-key:hover { background: #fef3c7; border-color: #f59e0b; }
+
+.btn-manage.btn-bg:hover { background: #dbeafe; border-color: #3b82f6; }
+
+.btn-manage.btn-del:hover { background: #fee2e2; border-color: var(--danger); }
+
+/* ============ 删除房间（保持兼容） ============ */
 .delete-room-list { max-height: 300px; overflow-y: auto; }
 
 .delete-room-item {

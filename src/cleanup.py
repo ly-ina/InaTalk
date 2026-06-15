@@ -4,16 +4,17 @@
 import asyncio
 import time
 from datetime import datetime, timedelta
+from pathlib import Path
 
 from .config import CLEANUP_HOUR, CLEANUP_MINUTE, REST_URL, ROOM_EXPIRE_DAYS, get_client
 from .files_manager import cleanup_expired_files, delete_room_files
 
 
 async def cleanup_expired_rooms():
-    """清理过期房间（含消息和文件）"""
+    """清理过期房间（含消息、文件、背景）"""
     cutoff = int(time.time() - ROOM_EXPIRE_DAYS * 86400)
     client = get_client()
-    url = f"{REST_URL}/rooms?last_activity=lt.{cutoff}"
+    url = f"{REST_URL}/rooms?select=id,name,background&last_activity=lt.{cutoff}"
     resp = await client.get(url)
     data = resp.json()
     if isinstance(data, dict):
@@ -28,9 +29,20 @@ async def cleanup_expired_rooms():
         return
     for r in data:
         if isinstance(r, dict) and "id" in r:
-            await delete_room_files(r["id"])
-            await client.delete(f"{REST_URL}/rooms?id=eq.{r['id']}")
-            print(f"[清理] 已删除过期房间: {r['name']} ({r['id']})")
+            room_id = r["id"]
+            # 删除背景文件
+            bg = r.get("background")
+            if bg:
+                bg_path = Path(bg)
+                if bg_path.exists():
+                    bg_path.unlink(missing_ok=True)
+            # 删除房间文件
+            await delete_room_files(room_id)
+            # 删除房间消息
+            await client.delete(f"{REST_URL}/messages?room_id=eq.{room_id}")
+            # 删除房间
+            await client.delete(f"{REST_URL}/rooms?id=eq.{room_id}")
+            print(f"[清理] 已删除过期房间: {r['name']} ({room_id})")
     if data:
         print(f"[清理] 共清理 {len(data)} 个过期房间")
 

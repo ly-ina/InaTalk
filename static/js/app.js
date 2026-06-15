@@ -21,6 +21,31 @@ function showView(name) {
     const viewEl = document.getElementById(views[name]);
     if (viewEl) viewEl.classList.add('active');
     document.getElementById('header').style.display = name === 'login' ? 'none' : 'flex';
+    // 离开聊天视图时清除背景
+    if (name !== 'chat') clearRoomBackground();
+}
+
+// ============ 房间背景 ============
+function applyRoomBackground(bgUrl) {
+    const msgs = document.getElementById('chatMessages');
+    if (bgUrl) {
+        msgs.style.backgroundImage = `url(${bgUrl})`;
+        msgs.style.backgroundSize = 'cover';
+        msgs.style.backgroundPosition = 'center';
+        msgs.style.backgroundRepeat = 'no-repeat';
+        msgs.classList.add('has-background');
+    } else {
+        clearRoomBackground();
+    }
+}
+
+function clearRoomBackground() {
+    const msgs = document.getElementById('chatMessages');
+    msgs.style.backgroundImage = '';
+    msgs.style.backgroundSize = '';
+    msgs.style.backgroundPosition = '';
+    msgs.style.backgroundRepeat = '';
+    msgs.classList.remove('has-background');
 }
 
 // ============ WebSocket ============
@@ -31,7 +56,7 @@ function connectWS() {
         console.log('[WS] 已连接');
         if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
         if (currentUser) {
-            ws.send(JSON.stringify({ type: 'login', username: currentUser, password: sessionStorage.getItem('im_pass') || '' }));
+            ws.send(JSON.stringify({ type: 'login', username: currentUser, password: localStorage.getItem('im_pass') || '' }));
         }
     };
     ws.onmessage = (e) => {
@@ -58,7 +83,7 @@ function handleMessage(msg) {
     switch (msg.type) {
         case 'login_result':
             if (msg.success) {
-                currentUser = sessionStorage.getItem('im_user') || '';
+                currentUser = localStorage.getItem('im_user') || '';
                 document.getElementById('currentUserLabel').textContent = currentUser;
                 document.getElementById('loginError').textContent = '';
                 document.getElementById('loginSuccess').textContent = msg.is_new ? '🎉 账号已创建，登录成功！' : '✅ 登录成功！';
@@ -70,6 +95,9 @@ function handleMessage(msg) {
             } else {
                 document.getElementById('loginError').textContent = msg.message;
                 document.getElementById('loginBtn').disabled = false;
+                // 自动登录失败则清除记录
+                localStorage.removeItem('im_user');
+                localStorage.removeItem('im_pass');
             }
             break;
         case 'room_list':
@@ -95,6 +123,7 @@ function handleMessage(msg) {
             document.getElementById('chatRoomName').textContent = msg.room.name;
             document.getElementById('chatRoomId').textContent = 'ID: ' + msg.room.id;
             document.getElementById('chatMessages').innerHTML = '';
+            applyRoomBackground(msg.room.background);
             if (msg.messages) msg.messages.forEach(m => appendMessage(m));
             scrollToBottom();
             showView('chat');
@@ -127,7 +156,7 @@ function handleMessage(msg) {
         case 'change_username_result':
             if (msg.success) {
                 currentUser = msg.new_username;
-                sessionStorage.setItem('im_user', msg.new_username);
+                localStorage.setItem('im_user', msg.new_username);
                 document.getElementById('currentUserLabel').textContent = currentUser;
                 document.getElementById('changeUsernameSuccess').textContent = msg.message;
                 document.getElementById('changeUsernameError').textContent = '';
@@ -141,7 +170,7 @@ function handleMessage(msg) {
             break;
         case 'reset_password_result':
             if (msg.success) {
-                sessionStorage.setItem('im_pass', document.getElementById('newPassword').value);
+                localStorage.setItem('im_pass', document.getElementById('newPassword').value);
                 document.getElementById('resetPasswordSuccess').textContent = msg.message;
                 document.getElementById('resetPasswordError').textContent = '';
                 document.getElementById('oldPassword').value = '';
@@ -169,11 +198,13 @@ function handleMessage(msg) {
         case 'delete_file_result':
             break;
         case 'my_rooms_list':
-            renderMyRooms(msg.rooms || []);
+            if (document.getElementById('roomManageModal').classList.contains('active')) {
+                renderMyRooms(msg.rooms || []);
+            }
             break;
         case 'delete_room_result':
             if (msg.success) {
-                document.getElementById('deleteRoomError').textContent = '';
+                document.getElementById('manageRoomError').textContent = '';
                 send({ type: 'get_my_rooms' });
                 refreshRooms();
                 if (currentRoom && currentRoom.id === msg.room_id) {
@@ -182,7 +213,34 @@ function handleMessage(msg) {
                     refreshRooms();
                 }
             } else {
-                document.getElementById('deleteRoomError').textContent = msg.message;
+                document.getElementById('manageRoomError').textContent = msg.message;
+            }
+            break;
+        case 'change_room_password_result':
+            if (msg.success) {
+                document.getElementById('roomPasswordManageError').textContent = '';
+                const successMsg = document.getElementById('roomPasswordManageInfo');
+                if (successMsg) successMsg.textContent = '✅ ' + msg.message;
+                send({ type: 'get_my_rooms' });
+                setTimeout(() => closeModal('roomPasswordManageModal'), 1500);
+            } else {
+                document.getElementById('roomPasswordManageError').textContent = msg.message;
+            }
+            break;
+        case 'remove_room_password_result':
+            if (msg.success) {
+                document.getElementById('roomPasswordManageError').textContent = '';
+                const successMsg = document.getElementById('roomPasswordManageInfo');
+                if (successMsg) successMsg.textContent = '✅ ' + msg.message;
+                send({ type: 'get_my_rooms' });
+                setTimeout(() => closeModal('roomPasswordManageModal'), 1500);
+            } else {
+                document.getElementById('roomPasswordManageError').textContent = msg.message;
+            }
+            break;
+        case 'update_room_background_result':
+            if (msg.success) {
+                send({ type: 'get_my_rooms' });
             }
             break;
     }
@@ -207,4 +265,26 @@ document.addEventListener('click', function(e) {
 
 // ============ 启动 ============
 connectWS();
-showView('login');
+// 自动登录：如果有本地保存的凭据，直接尝试登录
+const savedUser = localStorage.getItem('im_user');
+const savedPass = localStorage.getItem('im_pass');
+if (savedUser && savedPass) {
+    showView('login');
+    document.getElementById('loginUser').value = savedUser;
+    document.getElementById('loginPass').value = savedPass;
+    document.getElementById('loginBtn').textContent = '登录中...';
+    document.getElementById('loginBtn').disabled = true;
+    // 等 WS 连上后自动登录
+    const autoLogin = () => {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            send({ type: 'login', username: savedUser, password: savedPass });
+        } else if (ws && ws.readyState === WebSocket.CONNECTING) {
+            setTimeout(autoLogin, 200);
+        } else {
+            showView('login');
+        }
+    };
+    setTimeout(autoLogin, 300);
+} else {
+    showView('login');
+}

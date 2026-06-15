@@ -23,7 +23,7 @@
                 <div class="dropdown-menu" id="settingsMenu">
                     <button onclick="showChangeUsernameModal()">✏️ 修改用户名</button>
                     <button onclick="showResetPasswordModal()">🔑 重置密钥</button>
-                    <button onclick="showDeleteRoomModal()">🗑️ 删除我的房间</button>
+                    <button onclick="showRoomManageModal()">🛠️ 房间管理</button>
                 </div>
             </div>
             <button class="btn-sm" onclick="logout()">退出</button>
@@ -203,20 +203,62 @@
     </div>
 </div>
 
-<!-- 删除房间弹窗 -->
-<div class="modal-overlay" id="deleteRoomModal">
-    <div class="modal modal-wide">
-        <h3>删除我的房间</h3>
+<!-- 房间管理弹窗 -->
+<div class="modal-overlay" id="roomManageModal">
+    <div class="modal modal-manage">
+        <h3>房间管理</h3>
         <p style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:14px;">
-            仅显示你创建的房间，删除后不可恢复
+            仅显示你创建的房间，可管理密码、背景和删除
         </p>
-        <div class="delete-room-list" id="deleteRoomList">
+        <div class="manage-room-list" id="manageRoomList">
             <div class="room-empty">加载中...</div>
         </div>
         <div class="modal-btns">
-            <button class="btn btn-outline" onclick="closeModal('deleteRoomModal')">关闭</button>
+            <button class="btn btn-outline" onclick="closeModal('roomManageModal')">关闭</button>
         </div>
-        <div class="error-msg" id="deleteRoomError"></div>
+        <div class="error-msg" id="manageRoomError"></div>
+    </div>
+</div>
+
+<!-- 房间密码管理弹窗 -->
+<div class="modal-overlay" id="roomPasswordManageModal">
+    <div class="modal">
+        <h3 id="roomPasswordManageTitle">管理房间密码</h3>
+        <p style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:12px;" id="roomPasswordManageInfo"></p>
+        <div class="form-group" id="oldRoomPasswordGroup">
+            <label>当前密码</label>
+            <input id="oldRoomPassword" type="text" placeholder="输入当前房间密码" autocomplete="off">
+        </div>
+        <div class="form-group" id="newRoomPasswordGroup">
+            <label>新密码</label>
+            <input id="newRoomPassword" type="text" placeholder="输入新密码" autocomplete="off">
+        </div>
+        <div class="modal-btns">
+            <button class="btn btn-outline" onclick="closeModal('roomPasswordManageModal')">取消</button>
+            <button class="btn btn-primary" id="roomPasswordActionBtn" onclick="doRoomPasswordAction()">确认</button>
+        </div>
+        <div class="error-msg" id="roomPasswordManageError"></div>
+    </div>
+</div>
+
+<!-- 房间背景管理弹窗 -->
+<div class="modal-overlay" id="roomBackgroundModal">
+    <div class="modal">
+        <h3>房间背景</h3>
+        <p style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:12px;" id="roomBackgroundInfo"></p>
+        <div id="roomBackgroundPreview" style="margin-bottom:12px;text-align:center;display:none;">
+            <img id="roomBackgroundImg" src="" style="max-width:100%;max-height:200px;border-radius:8px;border:1px solid var(--border);">
+        </div>
+        <div class="form-group">
+            <label>选择背景图片</label>
+            <input type="file" id="backgroundFileInput" accept="image/*" style="width:100%;padding:8px;border:1.5px solid var(--border);border-radius:8px;">
+        </div>
+        <div class="modal-btns">
+            <button class="btn btn-outline" onclick="closeModal('roomBackgroundModal')">取消</button>
+            <button class="btn btn-primary" onclick="doUploadBackground()">上传背景</button>
+        </div>
+        <div class="error-msg" id="roomBackgroundError"></div>
+        <div class="success-msg" id="roomBackgroundSuccess"></div>
     </div>
 </div>
 

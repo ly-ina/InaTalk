@@ -10,7 +10,7 @@ from .auth import change_username, create_or_login_user, reset_password
 from .config import PORT
 from .files_manager import delete_file_record, get_room_files
 from .messages import get_room_messages, save_message
-from .rooms import create_room, delete_room, get_all_rooms, join_room
+from .rooms import create_room, delete_room, get_all_rooms, join_room, change_room_password, remove_room_password, update_room_background, get_my_rooms_detail
 
 # ============ 在线状态 ============
 online_users: dict[str, set[Any]] = {}
@@ -237,14 +237,13 @@ async def ws_handler(request: web.Request) -> web.WebSocketResponse:
                 })
                 await send({"type": "delete_file_result", "success": True, "file_id": file_id})
 
-            # --- 获取用户创建的房间 ---
+            # --- 获取用户创建的房间（管理用）---
             elif msg_type == "get_my_rooms":
                 if not current_user:
                     await send({"type": "error", "message": "请先登录"})
                     continue
-                rooms = await get_all_rooms()
-                my_rooms = [r for r in rooms if r.get("creator") == current_user]
-                await send({"type": "my_rooms_list", "rooms": my_rooms})
+                rooms = await get_my_rooms_detail(current_user)
+                await send({"type": "my_rooms_list", "rooms": rooms})
 
             # --- 删除房间 ---
             elif msg_type == "delete_room":
@@ -258,16 +257,55 @@ async def ws_handler(request: web.Request) -> web.WebSocketResponse:
                 result = await delete_room(room_id, current_user)
                 if result["success"]:
                     # 清理在线状态
-                    members = room_members.pop(room_id, set())
-                    for member in members:
-                        await broadcast_to_room(room_id, {
-                            "type": "system",
-                            "content": "⚠️ 房间已被创建者删除",
-                        })
+                    room_members.pop(room_id, None)
+                    await broadcast_to_room(room_id, {
+                        "type": "system",
+                        "content": "⚠️ 房间已被创建者删除",
+                    })
                     # 如果当前用户在该房间中，清除 current_room
                     if current_room == room_id:
                         current_room = None
                 await send({"type": "delete_room_result", **result})
+
+            # --- 修改房间密码 ---
+            elif msg_type == "change_room_password":
+                if not current_user:
+                    await send({"type": "error", "message": "请先登录"})
+                    continue
+                room_id = (msg.get("room_id") or "").strip().upper()
+                old_pw = (msg.get("old_password") or "").strip()
+                new_pw = (msg.get("new_password") or "").strip()
+                if not room_id:
+                    await send({"type": "change_room_password_result", "success": False, "message": "房间ID不能为空"})
+                    continue
+                result = await change_room_password(room_id, current_user, old_pw, new_pw)
+                await send({"type": "change_room_password_result", **result})
+
+            # --- 移除房间密码 ---
+            elif msg_type == "remove_room_password":
+                if not current_user:
+                    await send({"type": "error", "message": "请先登录"})
+                    continue
+                room_id = (msg.get("room_id") or "").strip().upper()
+                old_pw = (msg.get("old_password") or "").strip()
+                if not room_id:
+                    await send({"type": "remove_room_password_result", "success": False, "message": "房间ID不能为空"})
+                    continue
+                result = await remove_room_password(room_id, current_user, old_pw)
+                await send({"type": "remove_room_password_result", **result})
+
+            # --- 更新房间背景 ---
+            elif msg_type == "update_room_background":
+                if not current_user:
+                    await send({"type": "error", "message": "请先登录"})
+                    continue
+                room_id = (msg.get("room_id") or "").strip().upper()
+                bg_url = msg.get("background", None)
+                if not room_id:
+                    await send({"type": "update_room_background_result", "success": False, "message": "房间ID不能为空"})
+                    continue
+                result = await update_room_background(room_id, current_user, bg_url)
+                await send({"type": "update_room_background_result", **result})
 
             # --- 退出登录 ---
             elif msg_type == "logout":

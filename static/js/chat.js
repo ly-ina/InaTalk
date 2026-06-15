@@ -28,7 +28,11 @@ function appendMessage(msg) {
     const div = document.createElement('div');
     div.className = `msg-row ${isSelf ? 'self' : 'other'} ${isEmoji ? 'msg-emoji' : ''}`;
     if (isEmoji) {
-        div.innerHTML = `<div class="msg-bubble">${escHtml(msg.content)}</div>`;
+        div.innerHTML = `
+            <div>
+                <div class="msg-user">${escHtml(msg.username)} · ${time}</div>
+                <div class="msg-bubble">${escHtml(msg.content)}</div>
+            </div>`;
     } else {
         div.innerHTML = `
             <div>
