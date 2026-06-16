@@ -10,24 +10,38 @@
 ruanks/
 ├── main.py                    # 入口文件
 ├── src/
+│   ├── __init__.py            # 包初始化
 │   ├── config.py              # 全局配置 & Supabase 客户端
 │   ├── auth.py                # 用户认证（密码哈希、登录、改名）
 │   ├── rooms.py               # 房间管理（创建、加入、删除、密码/背景管理）
 │   ├── messages.py            # 消息管理（保存、查询、裁剪）
 │   ├── files_manager.py       # 文件管理（Supabase Storage 上传/下载/清理）
 │   ├── cleanup.py             # 定时清理（过期房间 & 文件）
+│   ├── logger.py              # 日志管理
 │   ├── websocket.py           # WebSocket 连接 & 消息路由
 │   └── routes.py              # HTTP 路由 & CORS 中间件
 ├── static/
 │   ├── index.html             # 前端页面
-│   ├── css/                   # 样式文件 (5个)
-│   └── js/                    # 前端逻辑 (6个)
+│   ├── css/                   # 样式文件 (5个: base, chat, files, lobby, responsive)
+│   └── js/                    # 前端逻辑 (6个: app, auth, chat, file, lobby, utils)
+├── tests/
+│   ├── __init__.py
+│   ├── conftest.py            # 测试配置 & fixtures
+│   ├── run_tests.py           # 测试运行入口
+│   ├── test_auth.py           # 认证模块测试
+│   ├── test_files_manager.py  # 文件管理测试
+│   ├── test_messages.py       # 消息模块测试
+│   └── test_rooms.py          # 房间模块测试
 ├── k8s/
 │   ├── base/                  # K8s 部署清单（Deployment/Service/Ingress/HPA）
-│   └── overlays/              # Kustomize overlay 示例
+│   ├── overlays/              # Kustomize overlay 示例
+│   └── install-ingress.sh     # Ingress 控制器安装脚本
+├── logs/                      # 运行日志目录
 ├── Dockerfile                 # 容器镜像构建
 ├── deploy.sh                  # 一键部署脚本（3 节点集群）
-├── requirements.txt
+├── env.example                # 环境变量模板
+├── pyproject.toml             # 项目元数据 & 构建配置
+├── requirements.txt           # Python 依赖
 └── README.md
 ```
 
