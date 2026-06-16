@@ -225,9 +225,9 @@ function openLightbox(url) {
 let stickerCache = [];  // { id, storage_key, filename }
 
 async function loadStickers() {
-    if (!currentRoom) return;
+    if (!currentUser) return;
     try {
-        const resp = await fetch(`${HTTP_URL}/api/stickers/${encodeURIComponent(currentRoom.id)}`);
+        const resp = await fetch(`${HTTP_URL}/api/my_stickers?user=${encodeURIComponent(currentUser)}`);
         const data = await resp.json();
         stickerCache = data.stickers || [];
     } catch {
@@ -240,7 +240,7 @@ function toggleStickerPanel() {
 }
 
 async function renderStickers() {
-    if (!currentRoom) return;
+    if (!currentUser) return;
     await loadStickers();
     const grid = document.getElementById('stickerGrid');
     if (!grid) return;
@@ -268,7 +268,12 @@ async function delSticker(stickerId) {
 
 function sendSticker(stickerId) {
     const viewUrl = `${HTTP_URL}/api/stickers/view/${stickerId}`;
-    send({ type: 'send_message', room_id: currentRoom.id, content: viewUrl, msg_type: 'sticker' });
+    // 公私聊兼容
+    if (typeof privateTarget !== 'undefined' && privateTarget) {
+        send({ type: 'send_private_message', content: viewUrl, msg_type: 'sticker' });
+    } else if (currentRoom) {
+        send({ type: 'send_message', room_id: currentRoom.id, content: viewUrl, msg_type: 'sticker' });
+    }
     closeStickerPanel();
 }
 
@@ -278,11 +283,11 @@ function triggerStickerUpload() {
 
 async function handleStickerUpload(e) {
     const file = e.target.files[0];
-    if (!file || !currentRoom || !currentUser) return;
+    if (!file || !currentUser) return;
     if (!file.type.startsWith('image/')) { alert('只支持图片'); return; }
     const formData = new FormData();
     formData.append('file', file);
-    const url = `${HTTP_URL}/api/stickers?room_id=${encodeURIComponent(currentRoom.id)}&uploader=${encodeURIComponent(currentUser)}`;
+    const url = `${HTTP_URL}/api/stickers?uploader=${encodeURIComponent(currentUser)}`;
     try {
         const resp = await fetch(url, { method: 'POST', body: formData });
         const result = await resp.json();

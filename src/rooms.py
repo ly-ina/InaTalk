@@ -73,6 +73,7 @@ async def join_room(room_id: str, password: str, _username: str) -> dict[str, ob
             "has_password": bool(row["password_hash"]),
             "creator": row["creator"],
             "background": row.get("background"),
+            "announcement": row.get("announcement"),
         },
     }
 
@@ -188,6 +189,36 @@ async def remove_room_password(
         "message": "房间密码已移除",
         "room_id": room_id,
         "has_password": False,
+    }
+
+
+async def set_announcement(
+    room_id: str, username: str, content: str | None
+) -> dict[str, object]:
+    """设置/更新/清除房间公告（仅创建者可操作），公告最长500字符"""
+    client = get_client()
+    url = f"{REST_URL}/rooms?select=id,name,creator&id=eq.{room_id}"
+    resp = await client.get(url)
+    rows = resp.json()
+    if not rows:
+        return {"success": False, "message": "房间不存在"}
+    row = rows[0]
+    if row["creator"] != username:
+        return {"success": False, "message": "只有房间创建者才能管理公告"}
+
+    if content is not None and len(content) > 500:
+        return {"success": False, "message": "公告最长500个字符"}
+
+    announcement = content.strip() if content and content.strip() else None
+    await client.patch(
+        f"{REST_URL}/rooms?id=eq.{room_id}",
+        json={"announcement": announcement},
+    )
+    return {
+        "success": True,
+        "message": "公告已更新" if announcement else "公告已清除",
+        "room_id": room_id,
+        "announcement": announcement,
     }
 
 

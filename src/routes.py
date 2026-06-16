@@ -12,8 +12,8 @@ from .logger import get_logger
 log = get_logger("routes")
 
 from .config import (
-    FILE_RETENTION, MAX_BG_SIZE, MAX_FILE_SIZE, REST_URL,
-    STATIC_DIR, get_client,
+    FILES_BUCKET, FILE_RETENTION, MAX_BG_SIZE, MAX_FILE_SIZE, REST_URL,
+    STATIC_DIR, STORAGE_URL, SUPABASE_URL, get_client,
 )
 from .files_manager import (
     delete_background_by_url,
@@ -249,7 +249,86 @@ async def handle_health(_request: web.Request) -> web.Response:
     return web.json_response({"status": "ok"})
 
 
+# ============ 私聊文件上传 ============
+async def handle_private_upload(request: web.Request) -> web.Response:
+    """私聊文件上传 → Supabase Storage，不写 files 表，直接返回 URL"""
+    reader = await request.multipart()
+    field = await reader.next()
+    if field is None or getattr(field, "name", None) != "file":
+        return web.json_response({"success": False, "message": "缺少文件字段"}, status=400)
+
+    filename = getattr(field, "filename", None) or "unnamed"
+    target = request.query.get("target", "").strip()
+    uploader = request.query.get("uploader", "").strip()
+    if not target or not uploader:
+        return web.json_response({"success": False, "message": "缺少参数"}, status=400)
+
+    _read_chunk = getattr(field, "read_chunk")
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        chunk = await _read_chunk(1024 * 1024)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > MAX_FILE_SIZE:
+            return web.json_response({"success": False, "message": f"文件超过 {MAX_FILE_SIZE//(1024**2)}MB 限制"}, status=413)
+        chunks.append(chunk)
+    data = b"".join(chunks)
+
+    file_type, _ = mimetypes.guess_type(filename)
+    file_type = file_type or "application/octet-stream"
+
+    try:
+        from .files_manager import upload_file_to_storage
+        import urllib.parse
+        storage_key = await upload_file_to_storage("private", filename, data, file_type)
+        # 走服务器代理下载，不依赖签名 URL
+        file_url = f"/api/private_file_view?key={urllib.parse.quote(storage_key, safe='')}"
+    except Exception as e:
+        log.error(f"私聊上传失败: {e}")
+        return web.json_response({"success": False, "message": f"上传失败: {e}"}, status=500)
+
+    return web.json_response({
+        "success": True,
+        "url": file_url,
+        "filename": filename,
+        "file_size": total,
+        "file_type": file_type,
+        "created_at": __import__("time").time(),
+    })
+
+
+async def handle_private_file_view(request: web.Request) -> web.Response:
+    """代理私聊文件：带 auth 从 Supabase Storage 取，返回给浏览器"""
+    from urllib.parse import unquote
+    storage_key = unquote(request.query.get("key", ""))
+    if not storage_key:
+        return web.json_response({"success": False, "message": "缺少 key"}, status=400)
+    try:
+        content, content_type = await download_file_content(storage_key)
+    except Exception as e:
+        return web.json_response({"success": False, "message": str(e)}, status=500)
+    return web.Response(body=content, content_type=content_type)
+
+
 # ============ 表情包管理 ============
+async def handle_my_stickers(request: web.Request) -> web.Response:
+    """获取用户个人表情包列表（跨房间）"""
+    username = request.query.get("user", "").strip()
+    if not username:
+        return web.json_response({"success": True, "stickers": []})
+    client = get_client()
+    resp = await client.get(
+        f"{REST_URL}/stickers?select=id,storage_key,uploaded_by,created_at"
+        f"&uploaded_by=eq.{username}&order=created_at.asc"
+    )
+    rows = resp.json()
+    if not isinstance(rows, list):
+        return web.json_response({"success": True, "stickers": []})
+    return web.json_response({"success": True, "stickers": rows})
+
+
 async def handle_sticker_list(request: web.Request) -> web.Response:
     """获取房间表情包列表"""
     room_id = request.match_info.get("room_id", "")
@@ -272,10 +351,10 @@ async def handle_sticker_upload(request: web.Request) -> web.Response:
         return web.json_response({"success": False, "message": "缺少文件"}, status=400)
 
     filename = getattr(field, "filename", "sticker.png")
-    room_id = request.query.get("room_id", "").strip().upper()
+    room_id = request.query.get("room_id", "").strip().upper() or "__global__"
     uploader = request.query.get("uploader", "").strip()
-    if not room_id or not uploader:
-        return web.json_response({"success": False, "message": "缺少参数"}, status=400)
+    if not uploader:
+        return web.json_response({"success": False, "message": "缺少 uploader"}, status=400)
 
     _read_chunk = getattr(field, "read_chunk")
     chunks = []
@@ -358,11 +437,14 @@ def create_app() -> web.Application:
 
     # API
     app.router.add_route("POST", "/api/upload", handle_upload)
+    app.router.add_route("POST", "/api/private_upload", handle_private_upload)
+    app.router.add_route("GET", "/api/private_file_view", handle_private_file_view)
     app.router.add_route("POST", "/api/upload_background", handle_background_upload)
     app.router.add_route("GET", "/api/files/{file_id}", handle_download)
     app.router.add_route("GET", "/api/files/{file_id}/view", handle_file_view)
     app.router.add_route("GET", "/api/health", handle_health)
     # 表情包
+    app.router.add_route("GET", "/api/my_stickers", handle_my_stickers)
     app.router.add_route("GET", "/api/stickers/{room_id}", handle_sticker_list)
     app.router.add_route("GET", "/api/stickers/view/{sticker_id}", handle_sticker_view)
     app.router.add_route("POST", "/api/stickers", handle_sticker_upload)

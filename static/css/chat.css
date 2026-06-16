@@ -71,6 +71,108 @@
 
 .btn-leave:active { transform: translateY(0); box-shadow: none; }
 
+/* ============ 房间公告栏 ============ */
+.room-announcement {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    margin: 0;
+    background: linear-gradient(135deg, #eff6ff 0%, #f0f4ff 100%);
+    border-bottom: 2px solid #dbeafe;
+    flex-shrink: 0;
+    animation: announceIn 0.3s ease;
+}
+
+@keyframes announceIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.announcement-content {
+    flex: 1;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    min-width: 0;
+}
+
+.announcement-icon {
+    font-size: 1rem;
+    flex-shrink: 0;
+    margin-top: 1px;
+}
+
+.announcement-text {
+    font-size: 0.84rem;
+    color: #1e40af;
+    line-height: 1.5;
+    word-break: break-word;
+    white-space: pre-wrap;
+}
+
+.announcement-edit-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    border: 1px solid #bfdbfe;
+    background: #fff;
+    cursor: pointer;
+    font-size: 0.85rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: all 0.15s;
+    color: #3b82f6;
+}
+
+.announcement-edit-btn:hover {
+    background: #3b82f6;
+    color: #fff;
+    border-color: #3b82f6;
+}
+
+.announcement-close-btn {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-size: 0.8rem;
+    color: #94a3b8;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: all 0.15s;
+}
+
+.announcement-close-btn:hover {
+    background: #e2e8f0;
+    color: #475569;
+}
+
+/* 折叠态 — 点击可展开 */
+.announcement-collapsed {
+    background: #f8fafc !important;
+    border-bottom: 1px solid #e2e8f0 !important;
+    cursor: pointer;
+    padding: 6px 16px !important;
+    transition: all 0.2s;
+}
+
+.announcement-collapsed:hover {
+    background: #f1f5f9 !important;
+    border-color: #cbd5e1 !important;
+}
+
+.announcement-collapsed .announcement-text {
+    font-size: 0.8rem;
+    user-select: none;
+}
+
 /* ============ 消息区 ============ */
 .chat-messages {
     flex: 1; overflow-y: auto; padding: 16px;
@@ -156,6 +258,9 @@
     display: none; flex-wrap: wrap; gap: 4px; padding: 8px 12px;
     border-top: 1px solid var(--border); background: #fafbfc;
     max-height: 140px; overflow-y: auto;
+    position: fixed; bottom: 60px; left: 0; right: 0;
+    max-width: 1200px; margin: 0 auto; z-index: 50;
+    border-radius: 8px 8px 0 0; box-shadow: 0 -4px 12px rgba(0,0,0,0.08);
 }
 
 .emoji-picker.active { display: flex; }
@@ -173,6 +278,9 @@
     background: #fafbfc;
     flex-direction: column;
     max-height: 260px;
+    position: fixed; bottom: 60px; left: 0; right: 0;
+    max-width: 1200px; margin: 0 auto; z-index: 50;
+    border-radius: 8px 8px 0 0; box-shadow: 0 -4px 12px rgba(0,0,0,0.08);
 }
 
 .sticker-picker.active { display: flex; }
@@ -226,3 +334,104 @@
     flex: 1;
     overflow-y: auto;
 }
+
+/* ============ 成员列表可点击 ============ */
+.member-item.clickable {
+    cursor: pointer;
+    border-radius: 6px;
+    transition: background 0.15s;
+}
+.member-item.clickable:hover {
+    background: #e8ecf1;
+}
+
+/* ============ 私聊面板 ============ */
+.private-chat-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: #fff;
+    height: 100%;
+}
+
+.private-chat-header {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #fafbfc;
+    flex-shrink: 0;
+}
+
+.private-back-btn {
+    border: none;
+    background: none;
+    color: var(--primary);
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 600;
+    padding: 4px 8px;
+    border-radius: 6px;
+    transition: background 0.15s;
+}
+
+.private-back-btn:hover { background: #e8ecf1; }
+
+.private-target-name {
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: var(--text);
+}
+
+.private-chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.private-chat-input {
+    padding: 12px 16px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    gap: 8px;
+    align-items: flex-end;
+    flex-shrink: 0;
+}
+
+.private-chat-input textarea {
+    flex: 1;
+    padding: 10px 14px;
+    border: 1.5px solid var(--border);
+    border-radius: 20px;
+    font-size: 0.9rem;
+    outline: none;
+    resize: none;
+    font-family: inherit;
+    max-height: 80px;
+    line-height: 1.4;
+}
+
+.private-chat-input textarea:focus { border-color: var(--primary); }
+
+.private-chat-input .send-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+    font-size: 1.2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    background: var(--primary);
+    color: #fff;
+    transition: all .15s;
+}
+
+.private-chat-input .send-btn:hover { background: var(--primary-hover); }

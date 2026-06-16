@@ -1,6 +1,11 @@
 // ============ 房间列表 ============
 function refreshRooms() {
     send({ type: 'get_rooms' });
+    refreshChatList();
+}
+
+function refreshChatList() {
+    if (currentUser) send({ type: 'get_chat_list' });
 }
 
 function renderRoomList(rooms) {
@@ -331,4 +336,73 @@ function doUploadBackground() {
         errEl.textContent = '上传请求失败，请检查网络';
     };
     xhr.send(formData);
+}
+
+// ============ 用户搜索 ============
+function showUserSearch() {
+    document.getElementById('userSearchInput').value = '';
+    document.getElementById('userSearchList').innerHTML = '<div class="room-empty">输入用户名开始搜索...</div>';
+    document.getElementById('userSearchModal').classList.add('active');
+    document.getElementById('userSearchInput').focus();
+}
+
+function doSearchUsers() {
+    const query = document.getElementById('userSearchInput').value.trim();
+    if (!query) {
+        document.getElementById('userSearchList').innerHTML = '<div class="room-empty">输入用户名开始搜索...</div>';
+        return;
+    }
+    send({ type: 'search_users', query });
+}
+
+function renderUserSearchResults(users) {
+    const el = document.getElementById('userSearchList');
+    if (!users.length) {
+        el.innerHTML = '<div class="room-empty">没有找到用户</div>';
+        return;
+    }
+    el.innerHTML = users.map(u => `
+        <div class="room-search-item" onclick="startPrivateFromSearch('${escHtml(u.username)}')">
+            <div>
+                <div class="room-search-name">${escHtml(u.username)} ${u.online ? '🟢' : '⚫'}</div>
+                <div class="room-search-meta">${u.online ? '在线' : '离线'}${u.online ? '' : ' · 可留言'}</div>
+            </div>
+        </div>
+    `).join('');
+}
+
+function startPrivateFromSearch(username) {
+    closeModal('userSearchModal');
+    openPrivateChat(username);
+}
+
+// ============ 私信列表渲染 ============
+function renderChatList(chats) {
+    const el = document.getElementById('chatList');
+    if (!chats.length) {
+        el.innerHTML = '<div class="chat-list-empty">暂无私信</div>';
+        return;
+    }
+    el.innerHTML = chats.map(c => {
+        const time = new Date(c.last_time * 1000);
+        const now = new Date();
+        const isToday = time.toDateString() === now.toDateString();
+        const timeStr = isToday
+            ? time.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+            : time.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
+        const initial = (c.partner || '?')[0].toUpperCase();
+        const preview = c.last_msg || '';
+        return `
+        <div class="chat-list-item" onclick="openPrivateChat('${escHtml(c.partner)}')">
+            <div class="chat-list-avatar">${escHtml(initial)}</div>
+            <div class="chat-list-info">
+                <div class="chat-list-name">
+                    ${escHtml(c.partner)}
+                    ${c.online ? '<span class="chat-list-dot" title="在线"></span>' : ''}
+                </div>
+                <div class="chat-list-preview">${escHtml(preview)}</div>
+            </div>
+            <div class="chat-list-time">${timeStr}</div>
+        </div>`;
+    }).join('');
 }

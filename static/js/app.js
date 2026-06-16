@@ -17,11 +17,10 @@ const EMOJIS = ['😀','😂','🤣','😍','🥰','😎','🤩','😇','🤗','
 // ============ 视图切换 ============
 function showView(name) {
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-    const views = { login: 'loginView', lobby: 'lobbyView', chat: 'chatView' };
+    const views = { login: 'loginView', lobby: 'lobbyView', chat: 'chatView', privateChat: 'privateChatView' };
     const viewEl = document.getElementById(views[name]);
     if (viewEl) viewEl.classList.add('active');
     document.getElementById('header').style.display = name === 'login' ? 'none' : 'flex';
-    // 离开聊天视图时清除背景
     if (name !== 'chat') clearRoomBackground();
 }
 
@@ -130,6 +129,7 @@ function handleMessage(msg) {
             document.getElementById('chatRoomId').textContent = 'ID: ' + msg.room.id;
             document.getElementById('chatMessages').innerHTML = '';
             applyRoomBackground(msg.room.background);
+            renderAnnouncement(msg.room.announcement);
             if (msg.timeline) {
                 msg.timeline.forEach(item => {
                     if (item.type === 'file') {
@@ -156,6 +156,7 @@ function handleMessage(msg) {
             break;
         case 'room_left':
             currentRoom = null;
+            renderAnnouncement(null);
             showView('lobby');
             refreshRooms();
             break;
@@ -256,6 +257,49 @@ function handleMessage(msg) {
             if (msg.success) {
                 send({ type: 'get_my_rooms' });
             }
+            break;
+        case 'announcement_updated':
+            renderAnnouncement(msg.announcement);
+            break;
+        case 'set_announcement_result':
+            if (msg.success) {
+                renderAnnouncement(msg.announcement);
+                document.getElementById('announcementSuccess').textContent = msg.message;
+                document.getElementById('announcementError').textContent = '';
+                setTimeout(() => {
+                    closeModal('announcementModal');
+                    document.getElementById('announcementSuccess').textContent = '';
+                }, 1200);
+            } else {
+                document.getElementById('announcementError').textContent = msg.message;
+            }
+            break;
+        case 'private_chat_opened':
+            privateChatId = msg.chat_id;
+            document.getElementById('privateChatMessages').innerHTML = '';
+            if (msg.messages && msg.messages.length) {
+                msg.messages.forEach(m => appendPrivateMessage(m));
+            }
+            scrollPrivateChat();
+            break;
+        case 'private_message':
+            refreshChatList();  // 自动刷新私信列表
+            if (privateTarget && (msg.sender === privateTarget || msg.sender === currentUser)) {
+                appendPrivateMessage(msg);
+                scrollPrivateChat();
+            } else if (msg.sender !== currentUser) {
+                // 收到新私聊，自动打开私聊窗口
+                openPrivateChat(msg.sender);
+            }
+            break;
+        case 'private_chat_closed':
+            refreshChatList();
+            break;
+        case 'user_search_result':
+            renderUserSearchResults(msg.users || []);
+            break;
+        case 'chat_list':
+            renderChatList(msg.chats || []);
             break;
     }
 }

@@ -1,3 +1,39 @@
 06-16 16:29:45 | INFO  | files | files 表已就绪
 06-16 16:30:44 | INFO  | routes | 上传成功: 夜罗兰.one (25200 bytes) -> 房间 39EC22E8
 06-16 16:31:35 | INFO  | routes | 房间 39EC22E8 背景已更新
+06-16 17:17:56 | INFO  | files | files 表已就绪
+06-16 17:26:06 | INFO  | files | files 表已就绪
+06-16 17:26:27 | INFO  | files | files 表已就绪
+06-16 17:28:50 | INFO  | files | files 表已就绪
+06-16 17:29:01 | INFO  | files | files 表已就绪
+06-16 17:29:07 | INFO  | files | files 表已就绪
+06-16 17:39:09 | INFO  | files | files 表已就绪
+06-16 17:41:27 | INFO  | files | files 表已就绪
+06-16 17:45:13 | INFO  | files | files 表已就绪
+06-16 17:48:54 | INFO  | files | files 表已就绪
+06-16 17:52:49 | INFO  | files | files 表已就绪
+06-16 17:55:33 | INFO  | files | files 表已就绪
+06-16 18:00:22 | INFO  | files | files 表已就绪
+06-16 18:00:37 | INFO  | files | files 表已就绪
+06-16 18:00:41 | INFO  | files | files 表已就绪
+06-16 18:14:22 | INFO  | files | files 表已就绪
+06-16 18:20:07 | INFO  | files | files 表已就绪
+06-16 18:22:02 | INFO  | files | files 表已就绪
+06-16 18:26:16 | INFO  | files | files 表已就绪
+06-16 18:29:16 | INFO  | files | files 表已就绪
+06-16 18:30:29 | INFO  | files | files 表已就绪
+06-16 18:36:32 | INFO  | files | files 表已就绪
+06-16 18:41:32 | INFO  | files | files 表已就绪
+06-16 18:45:46 | INFO  | files | files 表已就绪
+06-16 18:48:04 | INFO  | files | files 表已就绪
+06-16 18:51:18 | INFO  | files | files 表已就绪
+06-16 18:51:57 | ERROR | routes | 私聊上传失败: 签名 URL 生成失败: {"statusCode":"400","error":"Error","message":"body must have required property 'expiresIn'"}
+06-16 18:52:41 | INFO  | files | files 表已就绪
+06-16 18:55:27 | INFO  | files | files 表已就绪
+06-16 19:01:56 | INFO  | files | files 表已就绪
+06-16 19:08:50 | ERROR | ws | 连接异常: [Errno 11001] getaddrinfo failed
+06-16 19:08:53 | ERROR | ws | 连接异常: [Errno 11001] getaddrinfo failed
+06-16 19:14:34 | INFO  | files | files 表已就绪
+06-16 19:17:45 | INFO  | files | files 表已就绪
+06-16 19:21:03 | INFO  | files | files 表已就绪
+06-16 19:25:57 | INFO  | files | files 表已就绪

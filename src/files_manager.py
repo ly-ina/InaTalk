@@ -77,7 +77,7 @@ async def _get_signed_url(bucket: str, key: str, expires_in: int = 3600) -> str:
     client = get_storage_client()
     resp = await client.post(
         f"{STORAGE_URL}/object/sign/{bucket}/{key}",
-        json={"expires_in": expires_in},
+        json={"expiresIn": expires_in},
     )
     if resp.status_code >= 400:
         raise RuntimeError(f"签名 URL 生成失败: {resp.text[:200]}")

@@ -4,11 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>轻聊IM</title>
-<link rel="stylesheet" href="css/base.css">
-<link rel="stylesheet" href="css/lobby.css">
-<link rel="stylesheet" href="css/chat.css">
-<link rel="stylesheet" href="css/files.css">
-<link rel="stylesheet" href="css/responsive.css">
+<link rel="stylesheet" href="css/base.css?v=9">
+<link rel="stylesheet" href="css/lobby.css?v=14">
+<link rel="stylesheet" href="css/chat.css?v=12">
+<link rel="stylesheet" href="css/files.css?v=9">
+<link rel="stylesheet" href="css/responsive.css?v=9">
 </head>
 <body>
 
@@ -55,8 +55,13 @@
             <div class="lobby-actions">
                 <button class="btn btn-primary" onclick="showCreateRoomModal()">+ 创建房间</button>
                 <button class="btn btn-outline" onclick="showJoinRoomModal()">加入房间</button>
+                <button class="btn btn-outline" onclick="showUserSearch()" style="background:#f0f4ff;border-color:var(--primary);color:var(--primary);">🔍 搜索用户</button>
             </div>
             <div id="roomList"></div>
+            <div class="chat-list-section" id="chatListSection">
+                <div class="chat-list-title">💬 私信</div>
+                <div id="chatList"></div>
+            </div>
         </div>
     </div>
 
@@ -76,21 +81,15 @@
                         </button>
                     </div>
                 </div>
-                <div class="chat-messages" id="chatMessages"></div>
-                <!-- Emoji 面板 -->
-                <div class="emoji-picker" id="emojiPicker"></div>
-                <!-- 表情包面板 -->
-                <div class="sticker-picker" id="stickerPicker">
-                    <div class="sticker-picker-bar">
-                        <span class="sticker-title">表情包</span>
-                        <button class="sticker-upload-btn" onclick="triggerStickerUpload()">+ 上传</button>
-                        <button class="sticker-picker-close" onclick="closeStickerPanel()">✕</button>
-                        <input type="file" id="stickerInput" style="display:none" accept="image/*" onchange="handleStickerUpload(event)">
+                <div class="room-announcement" id="roomAnnouncement" style="display:none;">
+                    <div class="announcement-content">
+                        <span class="announcement-icon">📢</span>
+                        <span class="announcement-text" id="announcementText"></span>
                     </div>
-                    <div class="sticker-grid" id="stickerGrid">
-                        <div class="file-empty">暂无表情包，上传一张吧</div>
-                    </div>
+                    <button class="announcement-close-btn" id="announcementCloseBtn" title="关闭公告" onclick="dismissAnnouncement()">✕</button>
+                    <button class="announcement-edit-btn" id="announcementEditBtn" title="编辑公告" style="display:none;" onclick="showAnnouncementEditor()">✏️</button>
                 </div>
+                <div class="chat-messages" id="chatMessages"></div>
                 <div class="chat-input-area">
                     <button class="emoji-btn" onclick="toggleEmoji()" title="表情">😊</button>
                     <button class="emoji-btn" onclick="toggleStickers()" title="表情包">😸</button>
@@ -121,9 +120,59 @@
             </div>
         </div>
     </div>
+
+    <!-- 私聊独立视图 -->
+    <div class="view" id="privateChatView">
+        <div class="private-chat-main">
+            <div class="private-chat-header">
+                <button class="private-back-btn" onclick="closePrivateChat()">← 返回</button>
+                <span class="private-target-name" id="privateTargetName"></span>
+                <span style="width:24px;"></span>
+            </div>
+            <div class="private-chat-messages" id="privateChatMessages"></div>
+            <div class="private-chat-input">
+                <button class="emoji-btn" onclick="togglePrivateEmoji()" title="表情">😊</button>
+                <button class="emoji-btn" onclick="togglePrivateStickers()" title="表情包">😸</button>
+                <button class="emoji-btn file-upload-btn" onclick="triggerPrivateFileUpload()" title="上传文件">📎</button>
+                <textarea id="privateChatInput" rows="1" placeholder="输入私聊消息..." onkeydown="onPrivateChatKey(event)"></textarea>
+                <button class="send-btn" onclick="sendPrivateMessage()" title="发送">➤</button>
+                <input type="file" id="privateFileInput" style="display:none;" onchange="handlePrivateFileSelected(event)">
+            </div>
+        </div>
+    </div>
+
+    <!-- 全局共享：表情面板 -->
+    <div class="emoji-picker" id="emojiPicker"></div>
+    <!-- 全局共享：表情包面板 -->
+    <div class="sticker-picker" id="stickerPicker">
+        <div class="sticker-picker-bar">
+            <span class="sticker-title">表情包</span>
+            <button class="sticker-upload-btn" onclick="triggerStickerUpload()">+ 上传</button>
+            <button class="sticker-picker-close" onclick="closeStickerPanel()">✕</button>
+            <input type="file" id="stickerInput" style="display:none" accept="image/*" onchange="handleStickerUpload(event)">
+        </div>
+        <div class="sticker-grid" id="stickerGrid">
+            <div class="file-empty">暂无表情包，上传一张吧</div>
+        </div>
+    </div>
 </div>
 
-<!-- 创建房间弹窗 -->
+<!-- 用户搜索弹窗 -->
+<div class="modal-overlay" id="userSearchModal">
+    <div class="modal modal-wide">
+        <h3>🔍 搜索用户</h3>
+        <div class="form-group">
+            <input id="userSearchInput" type="text" placeholder="输入用户名搜索..." oninput="doSearchUsers()" autocomplete="off">
+        </div>
+        <div class="room-search-list" id="userSearchList">
+            <div class="room-empty">输入用户名开始搜索...</div>
+        </div>
+        <div class="modal-btns">
+            <button class="btn btn-outline" onclick="closeModal('userSearchModal')">关闭</button>
+        </div>
+    </div>
+</div>
+
 <div class="modal-overlay" id="createRoomModal">
     <div class="modal">
         <h3>创建新房间</h3>
@@ -280,11 +329,34 @@
     </div>
 </div>
 
-<script src="js/utils.js"></script>
-<script src="js/auth.js"></script>
-<script src="js/lobby.js"></script>
-<script src="js/chat.js"></script>
-<script src="js/file.js"></script>
-<script src="js/app.js"></script>
+<!-- 房间公告编辑弹窗 -->
+<div class="modal-overlay" id="announcementModal">
+    <div class="modal">
+        <h3>📢 编辑房间公告</h3>
+        <p style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:12px;">
+            公告将显示在聊天区域顶部，所有成员可见。留空则清除公告。
+        </p>
+        <div class="form-group">
+            <textarea id="announcementInput" rows="4" maxlength="500"
+                placeholder="输入公告内容，最长500字..." style="width:100%;resize:vertical;font-family:inherit;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-size:0.85rem;"></textarea>
+            <span style="font-size:0.72rem;color:var(--text-secondary);" id="announcementCharCount">0/500</span>
+        </div>
+        <div class="modal-btns">
+            <button class="btn btn-outline" onclick="closeModal('announcementModal')">取消</button>
+            <button class="btn btn-outline" style="color:var(--danger);border-color:var(--danger);" onclick="doClearAnnouncement()" id="clearAnnouncementBtn">清除公告</button>
+            <button class="btn btn-primary" onclick="doSetAnnouncement()">保存公告</button>
+        </div>
+        <div class="error-msg" id="announcementError"></div>
+        <div class="success-msg" id="announcementSuccess"></div>
+    </div>
+</div>
+
+<script src="js/utils.js?v=10"></script>
+<script src="js/auth.js?v=10"></script>
+<script src="js/lobby.js?v=14"></script>
+<script src="js/chat.js?v=13"></script>
+<script src="js/private_chat.js?v=13"></script>
+<script src="js/file.js?v=13"></script>
+<script src="js/app.js?v=14"></script>
 </body>
 </html>

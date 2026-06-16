@@ -7,17 +7,20 @@ from typing import Any
 from aiohttp import web, WSMsgType
 
 from .auth import change_username, create_or_login_user, create_session, reset_password, validate_session
-from .config import PORT
+from .config import PORT, REST_URL, get_client
 from .files_manager import delete_file_record, get_room_files
 from .logger import get_logger
 from .messages import get_room_messages, save_message
-from .rooms import create_room, delete_room, get_all_rooms, join_room, change_room_password, remove_room_password, update_room_background, get_my_rooms_detail
+from .rooms import create_room, delete_room, get_all_rooms, join_room, change_room_password, remove_room_password, update_room_background, get_my_rooms_detail, set_announcement
+from .private_chat import get_chat_id, save_private_message, get_private_messages
 
 log = get_logger("ws")
 
 # ============ 在线状态 ============
 online_users: dict[str, set[Any]] = {}
 room_members: dict[str, set[str]] = {}
+# 私聊会话：{username: target_username}，记录当前正在和谁私聊
+private_sessions: dict[str, str] = {}
 
 
 async def broadcast_to_room(room_id: str, message: dict[str, object], exclude: Any = None):
@@ -335,8 +338,124 @@ async def ws_handler(request: web.Request) -> web.WebSocketResponse:
                 result = await update_room_background(room_id, current_user, bg_url)
                 await send({"type": "update_room_background_result", **result})
 
+            # --- 设置房间公告 ---
+            elif msg_type == "set_announcement":
+                if not current_user:
+                    await send({"type": "error", "message": "请先登录"})
+                    continue
+                room_id = (msg.get("room_id") or "").strip().upper()
+                content = msg.get("content", None)  # None=清除, ""=清除, "text"=设置
+                if not room_id:
+                    await send({"type": "set_announcement_result", "success": False, "message": "房间ID不能为空"})
+                    continue
+                result = await set_announcement(room_id, current_user, content)
+                if result["success"]:
+                    # 广播公告更新给房间内所有成员
+                    await broadcast_to_room(room_id, {
+                        "type": "announcement_updated",
+                        "room_id": room_id,
+                        "announcement": result["announcement"],
+                    })
+                await send({"type": "set_announcement_result", **result})
+
+            # --- 开始私聊 ---
+            elif msg_type == "start_private_chat":
+                if not current_user:
+                    await send({"type": "error", "message": "请先登录"})
+                    continue
+                target = (msg.get("target") or "").strip()
+                if not target or target == current_user:
+                    await send({"type": "error", "message": "无效的私聊目标"})
+                    continue
+                # 允许离线留言，不检查在线状态
+                chat_id = get_chat_id(current_user, target)
+                messages = await get_private_messages(chat_id)
+                private_sessions[current_user] = target
+                await send({
+                    "type": "private_chat_opened",
+                    "target": target,
+                    "chat_id": chat_id,
+                    "messages": messages,
+                    "is_online": target in online_users,
+                })
+
+            # --- 搜索用户 ---
+            elif msg_type == "search_users":
+                if not current_user:
+                    await send({"type": "error", "message": "请先登录"})
+                    continue
+                query = (msg.get("query") or "").strip()
+                if not query or len(query) < 1:
+                    await send({"type": "user_search_result", "users": []})
+                    continue
+                client = get_client()
+                url = f"{REST_URL}/users?select=username&username=ilike.*{query}*&limit=20"
+                resp = await client.get(url)
+                rows = resp.json() or []
+                users = [
+                    {"username": r["username"], "online": r["username"] in online_users}
+                    for r in rows if isinstance(r, dict) and r.get("username") != current_user
+                ]
+                await send({"type": "user_search_result", "users": users})
+
+            # --- 私信列表 ---
+            elif msg_type == "get_chat_list":
+                if not current_user:
+                    continue
+                client = get_client()
+                url = f"{REST_URL}/private_messages?select=chat_id,sender,content,msg_type,created_at&chat_id=ilike.*{current_user}*&order=created_at.desc&limit=500"
+                resp = await client.get(url)
+                rows = resp.json() or []
+                seen = {}
+                for r in rows:
+                    cid = r["chat_id"]
+                    if cid not in seen:
+                        parts = cid.split("_")
+                        partner = parts[0] if len(parts) > 1 and parts[1] == current_user else (parts[1] if len(parts) > 1 else parts[0])
+                        seen[cid] = {
+                            "partner": partner,
+                            "last_msg": r["content"][:50] if len(r.get("content", "")) > 50 else r.get("content", ""),
+                            "last_time": r["created_at"],
+                            "last_sender": r["sender"],
+                            "online": partner in online_users,
+                        }
+                await send({"type": "chat_list", "chats": list(seen.values())})
+
+            # --- 发送私聊消息 ---
+            elif msg_type == "send_private_message":
+                if not current_user:
+                    await send({"type": "error", "message": "请先登录"})
+                    continue
+                target = private_sessions.get(current_user, "")
+                if not target:
+                    await send({"type": "error", "message": "请先选择私聊对象"})
+                    continue
+                content = (msg.get("content") or "").strip()
+                if not content or len(content) > 5000:
+                    continue
+                msg_subtype = msg.get("msg_type", "text")
+                if msg_subtype not in ("text", "emoji", "sticker", "file"):
+                    msg_subtype = "text"
+                chat_id = get_chat_id(current_user, target)
+                saved = await save_private_message(chat_id, current_user, content, msg_subtype)
+                payload = {"type": "private_message", **saved}
+                # 发给对方
+                for ws_target in online_users.get(target, set()):
+                    try:
+                        await ws_target.send_str(json.dumps(payload, ensure_ascii=False))
+                    except Exception:
+                        pass
+                # 发给自己（回显）
+                await send(payload)
+
+            # --- 关闭私聊 ---
+            elif msg_type == "close_private_chat":
+                _ = private_sessions.pop(current_user, None) if current_user else None
+                await send({"type": "private_chat_closed"})
+
             # --- 退出登录 ---
             elif msg_type == "logout":
+                _ = private_sessions.pop(current_user, None) if current_user else None
                 if current_user:
                     if current_room and current_room in room_members:
                         room_members[current_room].discard(current_user)
@@ -356,6 +475,7 @@ async def ws_handler(request: web.Request) -> web.WebSocketResponse:
     except Exception as e:
         log.error(f"连接异常: {e}")
     finally:
+        _ = private_sessions.pop(current_user, None) if current_user else None
         if current_user:
             if current_room and current_room in room_members:
                 room_members[current_room].discard(current_user)
