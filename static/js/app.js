@@ -83,21 +83,27 @@ function handleMessage(msg) {
     switch (msg.type) {
         case 'login_result':
             if (msg.success) {
-                currentUser = localStorage.getItem('im_user') || '';
+                currentUser = msg.token ? localStorage.getItem('im_user') || msg.username || '' : localStorage.getItem('im_user') || '';
                 document.getElementById('currentUserLabel').textContent = currentUser;
                 document.getElementById('loginError').textContent = '';
-                document.getElementById('loginSuccess').textContent = msg.is_new ? '🎉 账号已创建，登录成功！' : '✅ 登录成功！';
+                // 保存 token 用于快速重连
+                if (msg.token) {
+                    localStorage.setItem('im_token', msg.token);
+                    localStorage.setItem('im_user', msg.username || localStorage.getItem('im_user') || '');
+                }
+                document.getElementById('loginSuccess').textContent = msg.is_new ? '🎉 账号已创建，登录成功！' : (msg.message || '✅ 登录成功！');
                 setTimeout(() => {
                     showView('lobby');
                     refreshRooms();
                     document.getElementById('loginSuccess').textContent = '';
-                }, 600);
+                }, msg.token ? 100 : 600);
             } else {
                 document.getElementById('loginError').textContent = msg.message;
                 document.getElementById('loginBtn').disabled = false;
                 // 自动登录失败则清除记录
                 localStorage.removeItem('im_user');
                 localStorage.removeItem('im_pass');
+                localStorage.removeItem('im_token');
             }
             break;
         case 'room_list':
@@ -273,16 +279,31 @@ document.addEventListener('click', function(e) {
 
 // ============ 启动 ============
 connectWS();
-// 自动登录：如果有本地保存的凭据，直接尝试登录
+// 自动登录：优先用 session token（秒过），其次用密码
+const savedToken = localStorage.getItem('im_token');
 const savedUser = localStorage.getItem('im_user');
 const savedPass = localStorage.getItem('im_pass');
-if (savedUser && savedPass) {
+
+if (savedToken && savedUser) {
+    // 有 token，跳过登录页，直接 token 认证
+    document.getElementById('currentUserLabel').textContent = savedUser;
+    showView('lobby');
+    const tokenLogin = () => {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            send({ type: 'login', token: savedToken });
+        } else if (ws && ws.readyState === WebSocket.CONNECTING) {
+            setTimeout(tokenLogin, 200);
+        } else {
+            showView('login');
+        }
+    };
+    setTimeout(tokenLogin, 200);
+} else if (savedUser && savedPass) {
     showView('login');
     document.getElementById('loginUser').value = savedUser;
     document.getElementById('loginPass').value = savedPass;
     document.getElementById('loginBtn').textContent = '登录中...';
     document.getElementById('loginBtn').disabled = true;
-    // 等 WS 连上后自动登录
     const autoLogin = () => {
         if (ws && ws.readyState === WebSocket.OPEN) {
             send({ type: 'login', username: savedUser, password: savedPass });

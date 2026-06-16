@@ -34,6 +34,7 @@ function logout() {
     send({ type: 'logout' });
     localStorage.removeItem('im_user');
     localStorage.removeItem('im_pass');
+    localStorage.removeItem('im_token');
     currentUser = null;
     currentRoom = null;
     showView('login');

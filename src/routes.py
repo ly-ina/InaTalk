@@ -7,6 +7,10 @@ from typing import Any
 
 from aiohttp import web
 
+from .logger import get_logger
+
+log = get_logger("routes")
+
 from .config import (
     FILE_RETENTION, MAX_BG_SIZE, MAX_FILE_SIZE, REST_URL,
     STATIC_DIR, get_client,
@@ -94,10 +98,10 @@ async def handle_upload(request: web.Request) -> web.Response:
             storage_key=storage_key,
         )
     except Exception as e:
-        print(f"[文件] 上传失败: {e}")
+        log.error(f"上传失败: {e}")
         return web.json_response({"success": False, "message": f"文件上传失败: {e}"}, status=500)
 
-    print(f"[文件] 上传成功: {filename} ({total} bytes) -> 房间 {room_id}")
+    log.info(f"上传成功: {filename} ({total} bytes) -> 房间 {room_id}")
 
     # 通过 WebSocket 广播
     await broadcast_to_room(room_id, {"type": "new_file", "file": meta})
@@ -230,7 +234,7 @@ async def handle_background_upload(request: web.Request) -> web.Response:
     except Exception as e:
         return web.json_response({"success": False, "message": f"背景上传失败: {e}"}, status=500)
 
-    print(f"[背景] 房间 {room_id} 背景已更新")
+    log.info(f"房间 {room_id} 背景已更新")
 
     return web.json_response({
         "success": True,
@@ -306,7 +310,7 @@ async def handle_sticker_upload(request: web.Request) -> web.Response:
         })
         if sresp.status_code >= 400:
             detail = sresp.text[:200]
-            print(f"[表情包] 入库失败: {detail}")
+            log.error(f"表情包入库失败: {detail}")
             return web.json_response({"success": False, "message": f"入库失败: {detail}"}, status=500)
         sticker_data = sresp.json()
         sid = sticker_data[0]["id"] if isinstance(sticker_data, list) and sticker_data else None
@@ -314,7 +318,7 @@ async def handle_sticker_upload(request: web.Request) -> web.Response:
             "id": sid, "storage_key": storage_key, "filename": filename,
         }})
     except Exception as e:
-        print(f"[表情包] 异常: {e}")
+        log.error(f"表情包异常: {e}")
         return web.json_response({"success": False, "message": str(e)}, status=500)
 
 

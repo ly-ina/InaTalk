@@ -106,3 +106,24 @@ async def reset_password(username: str, old_password: str, new_password: str) ->
         json={"password_hash": pw_hash, "salt": salt},
     )
     return {"success": True, "message": "密钥已更新"}
+
+
+# ============ Session Token（内存态，重启即失效）============
+_sessions: dict[str, str] = {}  # token → username
+
+
+def create_session(username: str) -> str:
+    """生成 session token，用于快速重连跳过 Supabase 验证"""
+    token = secrets.token_hex(32)
+    _sessions[token] = username
+    return token
+
+
+def validate_session(token: str) -> str | None:
+    """验证 token，返回 username 或 None"""
+    return _sessions.get(token)
+
+
+def invalidate_session(token: str):
+    """销毁 session（logout 时调用）"""
+    _sessions.pop(token, None)

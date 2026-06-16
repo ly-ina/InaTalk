@@ -9,6 +9,9 @@ from .config import (
     BACKGROUNDS_BUCKET, FILE_RETENTION, FILES_BUCKET,
     REST_URL, STORAGE_URL, get_client, get_storage_client, SUPABASE_URL,
 )
+from .logger import get_logger
+
+log = get_logger("files")
 
 
 # ============ Storage 辅助 ============
@@ -48,7 +51,7 @@ async def _delete_from_storage(bucket: str, keys: list[str]):
         headers={"Content-Type": "application/json"},
     )
     if resp.status_code >= 400:
-        print(f"[存储] 删除失败 ({resp.status_code}): {resp.text[:200]}")
+        log.error(f"删除失败 ({resp.status_code}): {resp.text[:200]}")
 
 
 async def _delete_by_prefix(bucket: str, prefix: str):
@@ -60,7 +63,7 @@ async def _delete_by_prefix(bucket: str, prefix: str):
         json={"prefix": prefix, "limit": 1000},
     )
     if resp.status_code >= 400:
-        print(f"[存储] 列出文件失败 ({resp.status_code}): {resp.text[:200]}")
+        log.error(f"列出文件失败 ({resp.status_code}): {resp.text[:200]}")
         return
     items = resp.json()
     if not isinstance(items, list) or not items:
@@ -96,9 +99,9 @@ async def ensure_files_table():
     url = f"{REST_URL}/files?limit=1"
     resp = await client.get(url)
     if resp.status_code >= 400:
-        print(f"[文件] 请先在 Supabase 中创建 files 表，SQL 见 README.md")
+        log.warning("files 表不存在，请先执行 README 中的 SQL")
     else:
-        print(f"[文件] files 表已就绪")
+        log.info("files 表已就绪")
 
     await _ensure_buckets()
 
@@ -202,15 +205,14 @@ async def cleanup_expired_files():
             await _delete_from_storage(FILES_BUCKET, keys)
         for r in rows:
             await client.delete(f"{REST_URL}/files?id=eq.{r['id']}")
-            print(f"[文件清理] 已删除过期文件: {r.get('id')}")
-        print(f"[文件清理] 共清理 {len(rows)} 个过期文件")
+            log.info(f"已删除过期文件: {r.get('id')}")
+        log.info(f"共清理 {len(rows)} 个过期文件")
 
 
 # ============ 供 routes.py 使用的公开接口 ============
 
 async def upload_file_to_storage(room_id: str, filename: str, data: bytes, content_type: str) -> str:
     """上传聊天文件到 Storage，返回 storage_key"""
-    import re
     file_uuid = uuid.uuid4().hex[:8]
     # Supabase Storage key 只能含 ASCII，取扩展名 + UUID 避免中文报错
     safe_name = filename.encode("ascii", "ignore").decode("ascii") or "file"

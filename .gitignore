@@ -19,6 +19,9 @@ backgrounds/
 .vscode/
 .idea/
 
+# 日志
+logs/
+
 # OS
 .DS_Store
 Thumbs.db

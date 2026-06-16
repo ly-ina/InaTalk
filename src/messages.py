@@ -5,6 +5,9 @@ import time
 from typing import Any
 
 from .config import MAX_MSG_PER_ROOM, REST_URL, get_client
+from .logger import get_logger
+
+log = get_logger("messages")
 
 
 async def get_room_messages(room_id: str, limit: int = 200) -> list[dict[str, object]]:
@@ -49,11 +52,11 @@ async def save_message(room_id: str, username: str, content: str, msg_type: str 
     )
     if resp.status_code >= 400:
         detail = resp.text[:200]
-        print(f"[消息] 保存失败 ({resp.status_code}): {detail}")
+        log.error(f"保存失败 ({resp.status_code}): {detail}")
         raise RuntimeError(f"消息保存失败: {detail}")
     data = resp.json()
     if not isinstance(data, list) or not data:
-        print(f"[消息] 返回异常: {data}")
+        log.error(f"返回异常: {data}")
         raise RuntimeError(f"消息保存失败: 返回格式异常")
     saved = data[0]
 

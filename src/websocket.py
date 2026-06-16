@@ -6,11 +6,14 @@ from typing import Any
 
 from aiohttp import web, WSMsgType
 
-from .auth import change_username, create_or_login_user, reset_password
+from .auth import change_username, create_or_login_user, create_session, reset_password, validate_session
 from .config import PORT
 from .files_manager import delete_file_record, get_room_files
+from .logger import get_logger
 from .messages import get_room_messages, save_message
 from .rooms import create_room, delete_room, get_all_rooms, join_room, change_room_password, remove_room_password, update_room_background, get_my_rooms_detail
+
+log = get_logger("ws")
 
 # ============ 在线状态 ============
 online_users: dict[str, set[Any]] = {}
@@ -71,6 +74,17 @@ async def ws_handler(request: web.Request) -> web.WebSocketResponse:
             if msg_type == "login":
                 username = (msg.get("username") or "").strip()
                 password = (msg.get("password") or "").strip()
+                token = (msg.get("token") or "").strip()
+                # 优先走 session token（秒过，跳过 Supabase 查询）
+                if token:
+                    cached_user = validate_session(token)
+                    if cached_user:
+                        current_user = cached_user
+                        online_users.setdefault(cached_user, set()).add(ws)
+                        await send({"type": "login_result", "success": True, "token": token, "is_new": False,
+                                     "message": "已恢复会话"})
+                        continue
+                # 降级为密码登录
                 if not username or not password:
                     await send({"type": "login_result", "success": False, "message": "用户名和密钥不能为空"})
                     continue
@@ -81,6 +95,8 @@ async def ws_handler(request: web.Request) -> web.WebSocketResponse:
                 if result["success"]:
                     current_user = username
                     online_users.setdefault(username, set()).add(ws)
+                    new_token = create_session(username)
+                    result["token"] = new_token
                 await send({"type": "login_result", **result})
 
             # --- 获取房间列表 ---
@@ -338,7 +354,7 @@ async def ws_handler(request: web.Request) -> web.WebSocketResponse:
                 await send({"type": "logout_result", "success": True})
 
     except Exception as e:
-        print(f"[连接异常] {e}")
+        log.error(f"连接异常: {e}")
     finally:
         if current_user:
             if current_room and current_room in room_members:
