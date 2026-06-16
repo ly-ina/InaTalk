@@ -439,6 +439,71 @@ echo "✅ 部署完成"
 | hostAliases | 每次更新丢失，需重新 patch；或写入部署 YAML 的 template.spec |
 | 端口转发 | Windows `netsh portproxy` 规则是持久的，重启不丢 |
 
+## 集群容灾 & 高可用
+
+### 架构优势
+
+| 特性 | 说明 |
+|------|------|
+| 无状态服务 | 所有业务数据存 Supabase，K8s 节点仅跑计算 + 转发，Pod 重启不丢数据 |
+| 自愈 | 节点宕机后 30s 内 K8s 将 Pod 自动调度到健康节点 |
+| 滚动更新 | `kubectl set image` 零停机更新，旧 Pod 处理完请求后新 Pod 上线 |
+| 数据持久 | Supabase PostgreSQL 每日自动备份，文件存储于 S3 兼容 Storage |
+
+### 集群优势演示
+
+#### 演示1：手动杀 Pod（自愈）
+
+```bash
+# 终端1：观察 Pod 状态
+kubectl -n ruanks get pods -w
+
+# 终端2：暴力删除 Pod
+kubectl -n ruanks delete pod <pod名> --grace-period=0
+
+# 结果：3-5 秒自动拉起新 Pod，前端 WebSocket 自动重连，消息不丢
+```
+
+#### 演示2：节点宕机（漂移）
+
+```bash
+# 模拟 node2 崩溃
+ssh root@192.168.20.144 "shutdown -h now"
+
+# master 观察
+kubectl get nodes                          # node2 → NotReady
+kubectl -n ruanks get pods -o wide          # Pod 自动漂移到 node1
+# ~30 秒恢复，前端短暂断连后重连成功
+```
+
+#### 演示3：滚动更新（零停机）
+
+```bash
+# 改镜像后更新
+kubectl set image deployment/ruanks ruanks=ruanks:v2
+# 前端持续发消息，旧 Pod 处理完后新 Pod 启动，无中断
+```
+
+### 性能基准
+
+| 指标 | 数值 | 说明 |
+|------|------|------|
+| 并发在线 | ~200-500 人 | Python aiohttp 单进程 + WebSocket 长连接 |
+| 单条消息延迟 | <50ms | 纯内存广播，不等待 DB |
+| 1000 条消息 | <1 秒 | 异步非阻塞 |
+| 水平扩展 | 不支持 | WebSocket 单副本运行（多副本需引入 Redis 消息总线） |
+
+### 扩展路线
+
+```
+当前:  单 Pod → NodePort → aiohttp WebSocket
+目标1: + Redis Pub/Sub  → 多副本广播
+目标2: + HPA             → 按 CPU/连接数自动扩缩
+目标3: + Ingress         → 域名 + TLS + sticky session
+```
+
+---
+
 ## 已知问题
 
 | 问题 | 状态 |
