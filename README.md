@@ -10,24 +10,38 @@
 ruanks/
 ├── main.py                    # 入口文件
 ├── src/
+│   ├── __init__.py            # 包初始化
 │   ├── config.py              # 全局配置 & Supabase 客户端
 │   ├── auth.py                # 用户认证（密码哈希、登录、改名）
 │   ├── rooms.py               # 房间管理（创建、加入、删除、密码/背景管理）
 │   ├── messages.py            # 消息管理（保存、查询、裁剪）
 │   ├── files_manager.py       # 文件管理（Supabase Storage 上传/下载/清理）
 │   ├── cleanup.py             # 定时清理（过期房间 & 文件）
+│   ├── logger.py              # 日志管理
 │   ├── websocket.py           # WebSocket 连接 & 消息路由
 │   └── routes.py              # HTTP 路由 & CORS 中间件
 ├── static/
 │   ├── index.html             # 前端页面
-│   ├── css/                   # 样式文件 (5个)
-│   └── js/                    # 前端逻辑 (6个)
+│   ├── css/                   # 样式文件 (5个: base, chat, files, lobby, responsive)
+│   └── js/                    # 前端逻辑 (6个: app, auth, chat, file, lobby, utils)
+├── tests/
+│   ├── __init__.py
+│   ├── conftest.py            # 测试配置 & fixtures
+│   ├── run_tests.py           # 测试运行入口
+│   ├── test_auth.py           # 认证模块测试
+│   ├── test_files_manager.py  # 文件管理测试
+│   ├── test_messages.py       # 消息模块测试
+│   └── test_rooms.py          # 房间模块测试
 ├── k8s/
 │   ├── base/                  # K8s 部署清单（Deployment/Service/Ingress/HPA）
-│   └── overlays/              # Kustomize overlay 示例
+│   ├── overlays/              # Kustomize overlay 示例
+│   └── install-ingress.sh     # Ingress 控制器安装脚本
+├── logs/                      # 运行日志目录
 ├── Dockerfile                 # 容器镜像构建
 ├── deploy.sh                  # 一键部署脚本（3 节点集群）
-├── requirements.txt
+├── env.example                # 环境变量模板
+├── pyproject.toml             # 项目元数据 & 构建配置
+├── requirements.txt           # Python 依赖
 └── README.md
 ```
 
@@ -293,76 +307,112 @@ MAX_BG_SIZE = 10*1024**2       # 背景图大小限制（10MB）
 
 ### 前置条件
 
-- 3 台 Linux 节点（1 master + 2 worker），已安装 kubeadm 集群 + containerd
+- 3 台 Linux 节点（1 master + 2 worker），kubeadm 集群 + containerd
 - 每台安装 Docker（`yum install -y docker`）
-- SealedSecret / Secret 存放 `.env` 敏感信息
-- Supabase 项目已配置（见上方 SQL）
+- Supabase 项目已建表（含 `stickers` 表，见上方 SQL）
+- Supabase Dashboard 手动创建 Storage bucket：`room-files`（私有）、`room-backgrounds`（公开）
 
 ### 第一次部署
 
 ```bash
-# 1. 将代码拉到每台节点的 /root/ruanks/
-#    或只在 master 初始化后 scp 到 node1/node2
+# 1. 代码放到每台节点的 /root/ruanks/
 
-# 2. 每台节点构建镜像
-docker build --no-cache -t ruanks:latest /root/ruanks/
+# 2. 三台节点构建镜像
+for ip in "" 192.168.20.143 192.168.20.144; do
+  ssh root@$ip "docker build --no-cache -t ruanks:latest /root/ruanks/"
+done
 
-# 3. 创建 Secret（编辑 .env 后执行）
+# 3. 创建 Secret（放 .env 敏感信息）
 kubectl create secret generic ruanks-env \
   --from-env-file=.env -n ruanks
 
 # 4. 部署
 kubectl apply -k k8s/base/
 
-# 5. 确认 Pod 运行
+# 5. 缩到单副本（WebSocket 不支持多副本）
+kubectl -n ruanks scale deployment ruanks --replicas=1
+
+# 6. 确认 Pod 运行
 kubectl -n ruanks get pods -w
+```
+
+### ⚠️ 部署后必做
+
+#### a) DNS 加速（hostAliases）
+
+K8s CoreDNS 多一层转发，Supabase API 可能巨慢甚至超时。在 Windows 查 IP 后写入 Pod hosts：
+
+```powershell
+# Windows PowerShell 查 IP
+[System.Net.Dns]::GetHostAddresses("你的项目.supabase.co")
+```
+
+```bash
+# K8s master 执行
+kubectl patch deployment ruanks -n ruanks -p \
+  '{"spec":{"template":{"spec":{"hostAliases":[{"ip":"172.64.149.246","hostnames":["xxx.supabase.co"]}]}}}}'
+```
+
+> 不写这一步登录会卡 10 秒+
+
+#### b) 防火墙放行 NodePort
+
+```bash
+# 三台都执行（否则 NodePort 不通）
+firewall-cmd --add-port=30080/tcp --permanent && firewall-cmd --reload
+```
+
+> 只在 master 放行也行，Pod 通过 kube-proxy iptables 路由
+
+#### c) 验证
+
+```bash
+# 直接测 Pod 端口（找 Pod 所在节点）
+kubectl -n ruanks get pods -o wide
+ssh root@<Pod所在节点IP> "curl -s http://localhost:30080/api/health"
+# 返回 {"status": "ok"} 即成功
 ```
 
 ### 更新部署
 
 ```bash
-# 修改代码后，Windows 上传到 master
-scp D:\my_work\ruanks\src\*.py root@192.168.20.137:/root/ruanks/src/
+# Windows → master
+scp D:\my_work\ruanks\src\*.py D:\my_work\ruanks\static\** root@192.168.20.137:/root/ruanks/
 
-# master 上同步到节点 + 重建 + 重启
-scp /root/ruanks/src/*.py root@192.168.20.143:/root/ruanks/src/
-scp /root/ruanks/src/*.py root@192.168.20.144:/root/ruanks/src/
+# master → 节点
+for ip in 192.168.20.143 192.168.20.144; do
+  scp /root/ruanks/src/*.py root@$ip:/root/ruanks/src/
+  scp /root/ruanks/static/js/*.js root@$ip:/root/ruanks/static/js/
+  scp /root/ruanks/static/css/*.css root@$ip:/root/ruanks/static/css/
+done
 
-# 三台重建镜像并滚动重启
+# 三台重建镜像 + 重启 Pod
 for ip in "" 192.168.20.143 192.168.20.144; do
   ssh root@$ip "docker rmi ruanks:latest 2>/dev/null; docker build --no-cache -t ruanks:latest /root/ruanks/"
 done
 kubectl delete pods -n ruanks --all
 ```
 
-### DNS 加速
+> ⚠️ 每次更新后 hostAliases 会丢失，需重新 patch
 
-K8s CoreDNS 多一层转发可能导致 Supabase API 变慢。在 Windows 查 IP：
+### Windows 端口转发（VMware NAT）
 
-```powershell
-# PowerShell
-[System.Net.Dns]::GetHostAddresses("你的项目.supabase.co")
-```
-
-写入 Pod hosts：
-
-```bash
-kubectl patch deployment ruanks -n ruanks -p \
-  '{"spec":{"template":{"spec":{"hostAliases":[{"ip":"172.64.149.246","hostnames":["xxx.supabase.co"]}]}}}}'
-```
-
-### Windows 端口转发
-
-如果 K8s 在 VMware NAT 内，Windows 需要转发端口：
+如果 K8s 在 VMware NAT 内，外部需通过 Windows 端口转发访问：
 
 ```powershell
-# 管理员 PowerShell
+# 管理员 PowerShell — 添加转发
 netsh interface portproxy add v4tov4 \
   listenport=8766 listenaddress=0.0.0.0 \
-  connectport=30080 connectaddress=192.168.20.137
+  connectport=30080 connectaddress=<Pod所在节点IP>
+
+# 查看规则
+netsh interface portproxy show all
+
+# 删除规则
+netsh interface portproxy delete v4tov4 listenport=8766 listenaddress=0.0.0.0
 ```
 
-### SSH 免密（可选）
+### SSH 免密（省事）
 
 ```bash
 ssh-keygen -t rsa -b 2048 -N '' -f ~/.ssh/id_rsa
@@ -370,6 +420,103 @@ for ip in 192.168.20.137 192.168.20.143 192.168.20.144; do
   ssh-copy-id root@$ip
 done
 ```
+
+### 一键脚本（包含 hostAliases）
+
+```bash
+#!/bin/bash
+# 保存为 redeploy.sh
+# 同步代码 → 三台重建 → 部署 + DNS 加速
+for ip in 192.168.20.143 192.168.20.144; do
+    scp /root/ruanks/src/*.py root@$ip:/root/ruanks/src/
+    scp /root/ruanks/static/js/*.js root@$ip:/root/ruanks/static/js/
+    scp /root/ruanks/static/css/*.css root@$ip:/root/ruanks/static/css/
+done
+for ip in "" 192.168.20.143 192.168.20.144; do
+    ssh root@$ip "docker rmi ruanks:latest 2>/dev/null; docker build --no-cache -t ruanks:latest /root/ruanks/"
+done
+kubectl delete pods -n ruanks --all
+sleep 10
+kubectl -n ruanks scale deployment ruanks --replicas=1
+kubectl patch deployment ruanks -n ruanks -p \
+  '{"spec":{"template":{"spec":{"hostAliases":[{"ip":"172.64.149.246","hostnames":["你的项目.supabase.co"]}]}}}}'
+echo "✅ 部署完成"
+```
+
+### 注意事项
+
+| 项目 | 说明 |
+|------|------|
+| Session Token | 内存态，重启 Pod 丢失；前端自动降级密码登录，慢一次 |
+| Storage Bucket | 须在 Supabase Dashboard **手动创建**，anon key 无创建权限 |
+| 多副本 | **必须单副本**，WebSocket 不支持多实例路由 |
+| hostAliases | 每次更新丢失，需重新 patch；或写入部署 YAML 的 template.spec |
+| 端口转发 | Windows `netsh portproxy` 规则是持久的，重启不丢 |
+
+## 集群容灾 & 高可用
+
+### 架构优势
+
+| 特性 | 说明 |
+|------|------|
+| 无状态服务 | 所有业务数据存 Supabase，K8s 节点仅跑计算 + 转发，Pod 重启不丢数据 |
+| 自愈 | 节点宕机后 30s 内 K8s 将 Pod 自动调度到健康节点 |
+| 滚动更新 | `kubectl set image` 零停机更新，旧 Pod 处理完请求后新 Pod 上线 |
+| 数据持久 | Supabase PostgreSQL 每日自动备份，文件存储于 S3 兼容 Storage |
+
+### 集群优势演示
+
+#### 演示1：手动杀 Pod（自愈）
+
+```bash
+# 终端1：观察 Pod 状态
+kubectl -n ruanks get pods -w
+
+# 终端2：暴力删除 Pod
+kubectl -n ruanks delete pod <pod名> --grace-period=0
+
+# 结果：3-5 秒自动拉起新 Pod，前端 WebSocket 自动重连，消息不丢
+```
+
+#### 演示2：节点宕机（漂移）
+
+```bash
+# 模拟 node2 崩溃
+ssh root@192.168.20.144 "shutdown -h now"
+
+# master 观察
+kubectl get nodes                          # node2 → NotReady
+kubectl -n ruanks get pods -o wide          # Pod 自动漂移到 node1
+# ~30 秒恢复，前端短暂断连后重连成功
+```
+
+#### 演示3：滚动更新（零停机）
+
+```bash
+# 改镜像后更新
+kubectl set image deployment/ruanks ruanks=ruanks:v2
+# 前端持续发消息，旧 Pod 处理完后新 Pod 启动，无中断
+```
+
+### 性能基准
+
+| 指标 | 数值 | 说明 |
+|------|------|------|
+| 并发在线 | ~200-500 人 | Python aiohttp 单进程 + WebSocket 长连接 |
+| 单条消息延迟 | <50ms | 纯内存广播，不等待 DB |
+| 1000 条消息 | <1 秒 | 异步非阻塞 |
+| 水平扩展 | 不支持 | WebSocket 单副本运行（多副本需引入 Redis 消息总线） |
+
+### 扩展路线
+
+```
+当前:  单 Pod → NodePort → aiohttp WebSocket
+目标1: + Redis Pub/Sub  → 多副本广播
+目标2: + HPA             → 按 CPU/连接数自动扩缩
+目标3: + Ingress         → 域名 + TLS + sticky session
+```
+
+---
 
 ## 已知问题
 

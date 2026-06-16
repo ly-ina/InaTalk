@@ -57,6 +57,11 @@ def run_dev():
 
 
 if __name__ == "__main__":
+    # Windows 上默认 ProactorEventLoop 会导致 WebSocket 断开时报 ConnectionResetError
+    # 切换到 SelectorEventLoop 解决
+    if sys.platform == "win32":
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
     if "--dev" in sys.argv:
         run_dev()
     else:
