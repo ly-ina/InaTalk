@@ -13,7 +13,7 @@ from .config import (
 )
 from .files_manager import (
     delete_background_by_url,
-    get_file_download_url,
+    download_file_content,
     save_file_metadata,
     upload_background_to_storage,
     upload_file_to_storage,
@@ -107,6 +107,39 @@ async def handle_upload(request: web.Request) -> web.Response:
 
 # ============ 文件下载 ============
 async def handle_download(request: web.Request) -> web.Response:
+    """通过 authenticated 端点代理下载私有桶文件"""
+    file_id = request.match_info.get("file_id", "")
+
+    client = get_client()
+    resp = await client.get(f"{REST_URL}/files?select=*&id=eq.{file_id}")
+    rows = resp.json()
+    if not isinstance(rows, list) or not rows:
+        return web.json_response({"success": False, "message": "文件不存在"}, status=404)
+
+    file_info = rows[0]
+    storage_key = file_info.get("storage_path", "")
+    original_name = file_info.get("original_name", file_info.get("filename", "download"))
+    if not storage_key:
+        return web.json_response({"success": False, "message": "文件路径无效"}, status=404)
+
+    try:
+        content, content_type = await download_file_content(storage_key)
+    except Exception as e:
+        return web.json_response({"success": False, "message": f"下载失败: {e}"}, status=500)
+
+    # 直接返回文件内容（正确 MIME + 原始文件名）
+    return web.Response(
+        body=content,
+        content_type=content_type,
+        headers={
+            "Content-Disposition": f'attachment; filename="{original_name}"',
+        },
+    )
+
+
+# ============ 文件预览（图片/视频/动图内联显示）============
+async def handle_file_view(request: web.Request) -> web.Response:
+    """返回文件内容，不带 attachment 头，浏览器直接渲染"""
     file_id = request.match_info.get("file_id", "")
 
     client = get_client()
@@ -121,12 +154,14 @@ async def handle_download(request: web.Request) -> web.Response:
         return web.json_response({"success": False, "message": "文件路径无效"}, status=404)
 
     try:
-        signed_url = await get_file_download_url(storage_key)
+        content, content_type = await download_file_content(storage_key)
     except Exception as e:
-        return web.json_response({"success": False, "message": f"获取下载链接失败: {e}"}, status=500)
+        return web.json_response({"success": False, "message": f"加载失败: {e}"}, status=500)
 
-    # 重定向到签名 URL
-    raise web.HTTPFound(signed_url)
+    return web.Response(
+        body=content,
+        content_type=content_type,
+    )
 
 
 # ============ 房间背景上传 ============
@@ -210,6 +245,105 @@ async def handle_health(_request: web.Request) -> web.Response:
     return web.json_response({"status": "ok"})
 
 
+# ============ 表情包管理 ============
+async def handle_sticker_list(request: web.Request) -> web.Response:
+    """获取房间表情包列表"""
+    room_id = request.match_info.get("room_id", "")
+    client = get_client()
+    resp = await client.get(
+        f"{REST_URL}/stickers?select=id,storage_key,uploaded_by,created_at"
+        f"&room_id=eq.{room_id}&order=created_at.asc"
+    )
+    rows = resp.json()
+    if not isinstance(rows, list):
+        return web.json_response({"success": True, "stickers": []})
+    return web.json_response({"success": True, "stickers": rows})
+
+
+async def handle_sticker_upload(request: web.Request) -> web.Response:
+    """上传表情包：multipart file → Storage + stickers表（不走 files 表，不广播）"""
+    reader = await request.multipart()
+    field = await reader.next()
+    if field is None or getattr(field, "name", None) != "file":
+        return web.json_response({"success": False, "message": "缺少文件"}, status=400)
+
+    filename = getattr(field, "filename", "sticker.png")
+    room_id = request.query.get("room_id", "").strip().upper()
+    uploader = request.query.get("uploader", "").strip()
+    if not room_id or not uploader:
+        return web.json_response({"success": False, "message": "缺少参数"}, status=400)
+
+    _read_chunk = getattr(field, "read_chunk")
+    chunks = []
+    total = 0
+    while True:
+        chunk = await _read_chunk(1024 * 1024)
+        if not chunk: break
+        total += len(chunk)
+        if total > MAX_FILE_SIZE:
+            return web.json_response({"success": False, "message": "文件过大"}, status=413)
+        chunks.append(chunk)
+    data = b"".join(chunks)
+    file_type, _ = mimetypes.guess_type(filename)
+    file_type = file_type or "image/png"
+
+    try:
+        import re, time as _time
+        file_uuid = __import__("uuid").uuid4().hex[:8]
+        safe_name = filename.encode("ascii", "ignore").decode("ascii") or "file"
+        ext = safe_name.rsplit(".", 1)[-1] if "." in safe_name else ""
+        safe_key = f"{file_uuid}.{ext}" if ext else file_uuid
+        storage_key = await upload_file_to_storage(room_id, safe_key, data, file_type)
+
+        now = _time.time()
+        client = get_client()
+        sresp = await client.post(f"{REST_URL}/stickers", json={
+            "room_id": room_id,
+            "file_id": file_uuid,
+            "storage_key": storage_key,
+            "uploaded_by": uploader,
+            "created_at": now,
+        })
+        if sresp.status_code >= 400:
+            detail = sresp.text[:200]
+            print(f"[表情包] 入库失败: {detail}")
+            return web.json_response({"success": False, "message": f"入库失败: {detail}"}, status=500)
+        sticker_data = sresp.json()
+        sid = sticker_data[0]["id"] if isinstance(sticker_data, list) and sticker_data else None
+        return web.json_response({"success": True, "sticker": {
+            "id": sid, "storage_key": storage_key, "filename": filename,
+        }})
+    except Exception as e:
+        print(f"[表情包] 异常: {e}")
+        return web.json_response({"success": False, "message": str(e)}, status=500)
+
+
+async def handle_sticker_view(request: web.Request) -> web.Response:
+    """预览表情包图片（不经过 files 表）"""
+    sticker_id = request.match_info.get("sticker_id", "")
+    client = get_client()
+    resp = await client.get(f"{REST_URL}/stickers?select=storage_key&id=eq.{sticker_id}")
+    rows = resp.json()
+    if not isinstance(rows, list) or not rows:
+        return web.json_response({"success": False, "message": "不存在"}, status=404)
+    storage_key = rows[0].get("storage_key", "")
+    if not storage_key:
+        return web.json_response({"success": False, "message": "路径无效"}, status=404)
+    try:
+        content, content_type = await download_file_content(storage_key)
+    except Exception as e:
+        return web.json_response({"success": False, "message": str(e)}, status=500)
+    return web.Response(body=content, content_type=content_type)
+
+
+async def handle_sticker_delete(request: web.Request) -> web.Response:
+    """删除表情包记录"""
+    sticker_id = request.match_info.get("sticker_id", "")
+    client = get_client()
+    await client.delete(f"{REST_URL}/stickers?id=eq.{sticker_id}")
+    return web.json_response({"success": True})
+
+
 # ============ 应用工厂 ============
 def create_app() -> web.Application:
     """创建并配置 aiohttp Application"""
@@ -222,7 +356,13 @@ def create_app() -> web.Application:
     app.router.add_route("POST", "/api/upload", handle_upload)
     app.router.add_route("POST", "/api/upload_background", handle_background_upload)
     app.router.add_route("GET", "/api/files/{file_id}", handle_download)
+    app.router.add_route("GET", "/api/files/{file_id}/view", handle_file_view)
     app.router.add_route("GET", "/api/health", handle_health)
+    # 表情包
+    app.router.add_route("GET", "/api/stickers/{room_id}", handle_sticker_list)
+    app.router.add_route("GET", "/api/stickers/view/{sticker_id}", handle_sticker_view)
+    app.router.add_route("POST", "/api/stickers", handle_sticker_upload)
+    app.router.add_route("DELETE", "/api/stickers/{sticker_id}", handle_sticker_delete)
 
     # 静态文件
     app.router.add_route("GET", "/", _serve_static(STATIC_DIR / "index.html"))

@@ -19,6 +19,20 @@ async def get_room_messages(room_id: str, limit: int = 200) -> list[dict[str, ob
     return list(reversed(rows))
 
 
+async def get_room_files(room_id: str, limit: int = 50) -> list[dict[str, object]]:
+    """获取房间历史文件记录"""
+    client = get_client()
+    url = (
+        f"{REST_URL}/files?select=*"
+        f"&room_id=eq.{room_id}&order=created_at.desc&limit={limit}"
+    )
+    resp = await client.get(url)
+    rows = resp.json()
+    if not isinstance(rows, list):
+        return []
+    return list(reversed(rows))
+
+
 async def save_message(room_id: str, username: str, content: str, msg_type: str = "text") -> dict[str, object]:
     """保存消息到数据库"""
     client = get_client()

@@ -84,6 +84,16 @@ function showRetentionPicker() {
     });
 }
 
+// ============ 文件类型判断 ============
+function getMediaType(filename) {
+    const ext = (filename || '').split('.').pop().toLowerCase();
+    const images = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'];
+    const videos = ['mp4', 'webm', 'mov', 'avi', 'mkv'];
+    if (images.includes(ext)) return 'image';
+    if (videos.includes(ext)) return 'video';
+    return 'file';
+}
+
 // ============ 文件消息 ============
 function appendFileMessage(file) {
     const el = document.getElementById('chatMessages');
@@ -92,22 +102,44 @@ function appendFileMessage(file) {
     const retentionLabel = {
         '3h': '3小时', '1d': '1天', '7d': '7天', '30d': '30天', 'forever': '永久'
     }[file.retention] || file.retention;
+    const viewUrl = `${HTTP_URL}/api/files/${file.id}/view`;
 
     const div = document.createElement('div');
     div.className = `msg-row ${isSelf ? 'self' : 'other'} file-msg`;
     div.setAttribute('data-file-id', file.id);
-    div.innerHTML = `
-        <div>
-            <div class="msg-user">${escHtml(file.uploaded_by)} · ${time}</div>
-            <div class="msg-bubble file-bubble">
-                <div class="file-icon">📄</div>
-                <div class="file-info">
-                    <div class="file-name" title="${escHtml(file.filename)}">${escHtml(file.filename)}</div>
-                    <div class="file-meta">${formatFileSize(file.file_size)} · 保留 ${retentionLabel}</div>
+
+    const mediaType = getMediaType(file.filename);
+    if (mediaType === 'image') {
+        div.innerHTML = `
+            <div>
+                <div class="msg-user">${escHtml(file.uploaded_by)} · ${time}</div>
+                <img class="chat-img" src="${viewUrl}" alt="" loading="lazy"
+                     onclick="openLightbox('${viewUrl}')" title="左键放大 | 右键下载" />
+            </div>`;
+    } else if (mediaType === 'video') {
+        div.innerHTML = `
+            <div>
+                <div class="msg-user">${escHtml(file.uploaded_by)} · ${time}</div>
+                <div class="msg-bubble media-bubble">
+                    <video class="chat-media" src="${viewUrl}" controls preload="metadata"
+                           title="${escHtml(file.filename)}"></video>
+                    <div class="media-caption">${escHtml(file.filename)} · ${formatFileSize(file.file_size)}</div>
                 </div>
-                <a class="file-download" href="${HTTP_URL}/api/files/${file.id}" download title="下载">⬇️</a>
-            </div>
-        </div>`;
+            </div>`;
+    } else {
+        div.innerHTML = `
+            <div>
+                <div class="msg-user">${escHtml(file.uploaded_by)} · ${time}</div>
+                <div class="msg-bubble file-bubble">
+                    <div class="file-icon">📄</div>
+                    <div class="file-info">
+                        <div class="file-name" title="${escHtml(file.filename)}">${escHtml(file.filename)}</div>
+                        <div class="file-meta">${formatFileSize(file.file_size)} · 保留 ${retentionLabel}</div>
+                    </div>
+                    <a class="file-download" href="${HTTP_URL}/api/files/${file.id}" download title="下载">⬇️</a>
+                </div>
+            </div>`;
+    }
     el.appendChild(div);
 }
 
@@ -122,19 +154,27 @@ function renderFileList() {
     const retentionLabel = {
         '3h': '3小时', '1d': '1天', '7d': '7天', '30d': '30天', 'forever': '永久'
     };
-    el.innerHTML = roomFiles.map(f => `
-        <div class="file-item" data-file-id="${f.id}">
-            <div class="file-item-icon">📄</div>
-            <div class="file-item-info">
-                <div class="file-item-name" title="${escHtml(f.filename)}">${escHtml(f.filename)}</div>
-                <div class="file-item-meta">${formatFileSize(f.file_size)} · ${retentionLabel[f.retention] || f.retention}</div>
-            </div>
-            <div class="file-item-actions">
-                <a class="file-item-dl" href="${HTTP_URL}/api/files/${f.id}" download title="下载">⬇️</a>
-                ${f.uploaded_by === currentUser ? `<button class="file-item-del" onclick="deleteFile('${f.id}')" title="删除">🗑</button>` : ''}
+    el.innerHTML = roomFiles
+        .filter(f => getMediaType(f.filename) !== 'image')
+        .map(f => {
+        const viewUrl = `${HTTP_URL}/api/files/${f.id}/view`;
+        const mt = getMediaType(f.filename);
+        let icon = '📄';
+        if (mt === 'video') icon = '🎬';
+        return `
+            <div class="file-item" data-file-id="${f.id}">
+                <div class="file-item-icon">${icon}</div>
+                <div class="file-item-info">
+                    <div class="file-item-name" title="${escHtml(f.filename)}">${escHtml(f.filename)}</div>
+                    <div class="file-item-meta">${formatFileSize(f.file_size)} · ${retentionLabel[f.retention] || f.retention}</div>
+                </div>
+                <div class="file-item-actions">
+                    ${mt === 'video' ? `<a class="file-item-dl" href="${viewUrl}" target="_blank" title="预览">👁️</a>` : ''}
+                    <a class="file-item-dl" href="${HTTP_URL}/api/files/${f.id}" download title="下载">⬇️</a>
+                    ${f.uploaded_by === currentUser ? `<button class="file-item-del" onclick="deleteFile('${f.id}')" title="删除">🗑</button>` : ''}
             </div>
         </div>
-    `).join('');
+    `}).join('');
 }
 
 function deleteFile(fileId) {
@@ -151,3 +191,134 @@ function toggleFilePanel() {
         }
     }
 }
+
+// ============ 图片灯箱（左键放大）============
+function openLightbox(url) {
+    let box = document.getElementById('img-lightbox');
+    if (!box) {
+        box = document.createElement('div');
+        box.id = 'img-lightbox';
+        box.className = 'lightbox';
+        box.innerHTML = `
+            <div class="lightbox-bg"></div>
+            <img class="lightbox-img" src="" alt="" />
+            <button class="lightbox-close" title="关闭">✕</button>
+            <a class="lightbox-dl" href="" download title="下载图片">⬇️</a>`;
+        document.body.appendChild(box);
+
+        const close = () => box.classList.remove('active');
+        box.querySelector('.lightbox-bg').addEventListener('click', close);
+        box.querySelector('.lightbox-close').addEventListener('click', close);
+        box.addEventListener('click', function(e) {
+            if (e.target === box) close();
+        });
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') close();
+        });
+    }
+    box.querySelector('.lightbox-img').src = url;
+    box.querySelector('.lightbox-dl').href = url.replace('/view', '');
+    box.classList.add('active');
+}
+
+// ============ 表情包（Supabase stickers 表）============
+let stickerCache = [];  // { id, storage_key, filename }
+
+async function loadStickers() {
+    if (!currentRoom) return;
+    try {
+        const resp = await fetch(`${HTTP_URL}/api/stickers/${encodeURIComponent(currentRoom.id)}`);
+        const data = await resp.json();
+        stickerCache = data.stickers || [];
+    } catch {
+        stickerCache = [];
+    }
+}
+
+function toggleStickerPanel() {
+    toggleStickers();
+}
+
+async function renderStickers() {
+    if (!currentRoom) return;
+    await loadStickers();
+    const grid = document.getElementById('stickerGrid');
+    if (!grid) return;
+    const myStickers = stickerCache.filter(s => s.uploaded_by === currentUser);
+    if (!myStickers.length) {
+        grid.innerHTML = '<div class="file-empty">暂无表情包，上传一张吧</div>';
+        return;
+    }
+    grid.innerHTML = myStickers.map(s => {
+        const viewUrl = `${HTTP_URL}/api/stickers/view/${s.id}`;
+        return `
+            <div class="sticker-item"
+                 onclick="sendSticker('${s.id}')"
+                 oncontextmenu="showCtxMenu(event, '${HTTP_URL}/api/stickers/view/${s.id}')">
+                <img src="${viewUrl}" alt="" loading="lazy" />
+                <button class="sticker-del" onclick="event.stopPropagation();delSticker('${s.id}')" title="删除">✕</button>
+            </div>`;
+    }).join('');
+}
+
+async function delSticker(stickerId) {
+    await fetch(`${HTTP_URL}/api/stickers/${stickerId}`, { method: 'DELETE' });
+    renderStickers();
+}
+
+function sendSticker(stickerId) {
+    const viewUrl = `${HTTP_URL}/api/stickers/view/${stickerId}`;
+    send({ type: 'send_message', room_id: currentRoom.id, content: viewUrl, msg_type: 'sticker' });
+    closeStickerPanel();
+}
+
+function triggerStickerUpload() {
+    document.getElementById('stickerInput').click();
+}
+
+async function handleStickerUpload(e) {
+    const file = e.target.files[0];
+    if (!file || !currentRoom || !currentUser) return;
+    if (!file.type.startsWith('image/')) { alert('只支持图片'); return; }
+    const formData = new FormData();
+    formData.append('file', file);
+    const url = `${HTTP_URL}/api/stickers?room_id=${encodeURIComponent(currentRoom.id)}&uploader=${encodeURIComponent(currentUser)}`;
+    try {
+        const resp = await fetch(url, { method: 'POST', body: formData });
+        const result = await resp.json();
+        if (result.success) {
+            renderStickers();
+        } else {
+            alert('上传失败: ' + (result.message || ''));
+        }
+    } catch (err) {
+        alert('上传失败: ' + err.message);
+    }
+    e.target.value = '';
+}
+
+// ============ 自定义右键菜单 ============
+function showCtxMenu(e, downloadUrl) {
+    e.preventDefault();
+    ctxTargetUrl = downloadUrl;
+    const menu = document.getElementById('ctxMenu');
+    menu.style.display = 'block';
+    menu.style.left = e.pageX + 'px';
+    menu.style.top = e.pageY + 'px';
+}
+
+function ctxDownload() {
+    if (ctxTargetUrl) {
+        const a = document.createElement('a');
+        a.href = ctxTargetUrl;
+        a.download = '';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    }
+    document.getElementById('ctxMenu').style.display = 'none';
+}
+
+document.addEventListener('click', function() {
+    document.getElementById('ctxMenu').style.display = 'none';
+});

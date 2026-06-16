@@ -124,7 +124,15 @@ function handleMessage(msg) {
             document.getElementById('chatRoomId').textContent = 'ID: ' + msg.room.id;
             document.getElementById('chatMessages').innerHTML = '';
             applyRoomBackground(msg.room.background);
-            if (msg.messages) msg.messages.forEach(m => appendMessage(m));
+            if (msg.timeline) {
+                msg.timeline.forEach(item => {
+                    if (item.type === 'file') {
+                        appendFileMessage(item);
+                    } else {
+                        appendMessage(item);
+                    }
+                });
+            }
             scrollToBottom();
             showView('chat');
             document.getElementById('chatInput').focus();

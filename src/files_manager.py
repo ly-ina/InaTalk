@@ -14,24 +14,8 @@ from .config import (
 # ============ Storage 辅助 ============
 
 async def _ensure_buckets():
-    """确保 Storage buckets 存在，不存在则创建"""
-    client = get_storage_client()
-    # 获取已有 buckets
-    resp = await client.get(f"{STORAGE_URL}/bucket")
-    existing = [b["name"] for b in (resp.json() or [])] if resp.status_code < 400 else []
-
-    for bucket_name, is_public in [(FILES_BUCKET, False), (BACKGROUNDS_BUCKET, True)]:
-        if bucket_name in existing:
-            print(f"[存储] bucket '{bucket_name}' 已就绪")
-            continue
-        resp = await client.post(
-            f"{STORAGE_URL}/bucket",
-            json={"name": bucket_name, "public": is_public},
-        )
-        if resp.status_code < 400:
-            print(f"[存储] bucket '{bucket_name}' 已创建 (public={is_public})")
-        else:
-            print(f"[存储] 创建 bucket '{bucket_name}' 失败: {resp.text[:200]}")
+    """Storage buckets 需在 Supabase Dashboard 手动创建，此处不检查"""
+    pass
 
 
 async def _upload_to_storage(bucket: str, key: str, data: bytes, content_type: str) -> str:
@@ -226,8 +210,13 @@ async def cleanup_expired_files():
 
 async def upload_file_to_storage(room_id: str, filename: str, data: bytes, content_type: str) -> str:
     """上传聊天文件到 Storage，返回 storage_key"""
+    import re
     file_uuid = uuid.uuid4().hex[:8]
-    key = f"{room_id}/{file_uuid}_{filename}"
+    # Supabase Storage key 只能含 ASCII，取扩展名 + UUID 避免中文报错
+    safe_name = filename.encode("ascii", "ignore").decode("ascii") or "file"
+    ext = safe_name.rsplit(".", 1)[-1] if "." in safe_name else ""
+    safe_key = f"{file_uuid}.{ext}" if ext else file_uuid
+    key = f"{room_id}/{safe_key}"
     await _upload_to_storage(FILES_BUCKET, key, data, content_type)
     return key
 
@@ -235,6 +224,19 @@ async def upload_file_to_storage(room_id: str, filename: str, data: bytes, conte
 async def get_file_download_url(storage_key: str) -> str:
     """获取文件的签名下载 URL（1小时有效）"""
     return await _get_signed_url(FILES_BUCKET, storage_key)
+
+
+async def download_file_content(storage_key: str) -> tuple[bytes, str]:
+    """通过 authenticated 端点下载私有桶文件内容，返回 (内容, content_type)"""
+    client = get_storage_client()
+    resp = await client.get(
+        f"{STORAGE_URL}/object/authenticated/{FILES_BUCKET}/{storage_key}",
+        follow_redirects=True,
+    )
+    if resp.status_code >= 400:
+        raise RuntimeError(f"文件下载失败 ({resp.status_code})")
+    ct = resp.headers.get("content-type", "application/octet-stream")
+    return resp.content, ct
 
 
 async def upload_background_to_storage(room_id: str, data: bytes, ext: str) -> str:

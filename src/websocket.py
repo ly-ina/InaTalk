@@ -132,7 +132,19 @@ async def ws_handler(request: web.Request) -> web.WebSocketResponse:
                     room_members.setdefault(room_id, set[str]()).add(current_user)
 
                     messages = await get_room_messages(room_id)
-                    await send({"type": "room_joined", "room": result["room"], "messages": messages})
+                    files = await get_room_files(room_id)
+
+                    # 合并消息和文件，按 created_at 统一排序
+                    timeline = []
+                    for m in messages:
+                        timeline.append({"type": "message", "data": m, "ts": m.get("created_at", 0)})
+                    for f in files:
+                        timeline.append({"type": "file", "data": f, "ts": f.get("created_at", 0)})
+                    timeline.sort(key=lambda x: x["ts"])
+
+                    await send({"type": "room_joined", "room": result["room"], "timeline": [
+                        {"type": t["type"], **t["data"]} for t in timeline
+                    ]})
                     await broadcast_to_room(room_id, {
                         "type": "system",
                         "content": f"{current_user} 加入了房间",
@@ -166,7 +178,7 @@ async def ws_handler(request: web.Request) -> web.WebSocketResponse:
                     await send({"type": "error", "message": "消息过长"})
                     continue
                 msg_subtype = msg.get("msg_type", "text")
-                if msg_subtype not in ("text", "emoji"):
+                if msg_subtype not in ("text", "emoji", "sticker"):
                     msg_subtype = "text"
                 saved = await save_message(current_room, current_user, content, msg_subtype)
                 await broadcast_to_room(current_room, {"type": "new_message", **saved})

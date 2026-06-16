@@ -165,3 +165,64 @@
 }
 
 .emoji-picker span:hover { background: #e5e7eb; }
+
+/* ============ 表情包面板 ============ */
+.sticker-picker {
+    display: none;
+    border-top: 1px solid var(--border);
+    background: #fafbfc;
+    flex-direction: column;
+    max-height: 260px;
+}
+
+.sticker-picker.active { display: flex; }
+
+.sticker-picker-bar {
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.sticker-title {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.sticker-upload-btn {
+    padding: 4px 14px;
+    border: 1.5px solid var(--primary);
+    border-radius: 16px;
+    background: #fff;
+    color: var(--primary);
+    cursor: pointer;
+    font-size: 0.78rem;
+    font-weight: 500;
+    transition: all .15s;
+}
+
+.sticker-upload-btn:hover {
+    background: var(--primary);
+    color: #fff;
+}
+
+.sticker-picker-close {
+    margin-left: auto;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1rem;
+    padding: 2px 8px;
+    border-radius: 4px;
+    color: var(--text-secondary);
+}
+
+.sticker-picker-close:hover { background: #e5e7eb; }
+
+.sticker-picker .sticker-grid {
+    flex: 1;
+    overflow-y: auto;
+}

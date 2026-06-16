@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>轻聊 - 临时 IM</title>
+<title>轻聊IM</title>
 <link rel="stylesheet" href="css/base.css">
 <link rel="stylesheet" href="css/lobby.css">
 <link rel="stylesheet" href="css/chat.css">
@@ -77,9 +77,23 @@
                     </div>
                 </div>
                 <div class="chat-messages" id="chatMessages"></div>
+                <!-- Emoji 面板 -->
                 <div class="emoji-picker" id="emojiPicker"></div>
+                <!-- 表情包面板 -->
+                <div class="sticker-picker" id="stickerPicker">
+                    <div class="sticker-picker-bar">
+                        <span class="sticker-title">表情包</span>
+                        <button class="sticker-upload-btn" onclick="triggerStickerUpload()">+ 上传</button>
+                        <button class="sticker-picker-close" onclick="closeStickerPanel()">✕</button>
+                        <input type="file" id="stickerInput" style="display:none" accept="image/*" onchange="handleStickerUpload(event)">
+                    </div>
+                    <div class="sticker-grid" id="stickerGrid">
+                        <div class="file-empty">暂无表情包，上传一张吧</div>
+                    </div>
+                </div>
                 <div class="chat-input-area">
                     <button class="emoji-btn" onclick="toggleEmoji()" title="表情">😊</button>
+                    <button class="emoji-btn" onclick="toggleStickers()" title="表情包">😸</button>
                     <button class="emoji-btn file-upload-btn" onclick="triggerFileUpload()" title="上传文件">📎</button>
                     <textarea id="chatInput" rows="1" placeholder="输入消息..." onkeydown="onChatKey(event)"></textarea>
                     <button class="send-btn" id="sendBtn" onclick="sendMessage()" title="发送">➤</button>
@@ -95,6 +109,10 @@
                     <div class="file-panel-list" id="fileListContent">
                         <div class="file-empty">正在加载...</div>
                     </div>
+                </div>
+                <!-- 自定义右键菜单 -->
+                <div class="ctx-menu" id="ctxMenu" style="display:none;">
+                    <div class="ctx-item" onclick="ctxDownload()">⬇️ 下载</div>
                 </div>
             </div>
             <div class="chat-sidebar">

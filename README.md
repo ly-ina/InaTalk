@@ -1,6 +1,6 @@
 # 轻聊 · 临时 IM 系统
 
-纯 Python + Supabase (PostgreSQL + Storage) + WebSocket 打造的轻量化临时即时通讯系统。**无注册、无手机号**，开箱即用。
+纯 Python + Supabase (PostgreSQL + Storage) + WebSocket 打造的轻量化临时即时通讯系统。**无注册、无手机号**，开箱即用。支持 Kubernetes 集群部署。
 
 ---
 
@@ -110,6 +110,18 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON public.users    TO anon;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.rooms    TO anon;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.messages TO anon;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.files    TO anon;
+
+-- 表情包表（新增）
+CREATE TABLE stickers (
+    id SERIAL PRIMARY KEY,
+    room_id TEXT NOT NULL,
+    file_id TEXT NOT NULL,
+    storage_key TEXT NOT NULL,
+    uploaded_by TEXT NOT NULL,
+    created_at DOUBLE PRECISION NOT NULL
+);
+GRANT ALL ON public.stickers TO anon;
+GRANT USAGE, SELECT ON SEQUENCE stickers_id_seq TO anon;
 ```
 
 ### 3. 创建 Storage Bucket（一次性）
@@ -179,9 +191,27 @@ python main.py --dev
 | 上传 | 点击 📎 按钮选择文件 |
 | 大小限制 | 单文件最大 **50MB** |
 | 保留时长 | 3小时 / 1天 / 7天 / 30天 / 永久 |
+| 图片预览 | JPG/PNG/GIF/WebP 直接内联显示，左键放大灯箱 |
+| 视频预览 | MP4/WebM 内联播放 |
 | 存储 | **Supabase Storage**，不占服务器磁盘 |
-| 下载 | 通过签名 URL 安全下载（1小时有效） |
+| 下载 | 后端代理 authenticated 端点安全下载 |
 | 删除房间 | 云端文件随房间一并删除 |
+
+### 表情包（新）
+
+| 功能 | 说明 |
+|------|------|
+| 上传 | 聊天栏点 😸 → "+ 上传"，选图片上传 |
+| 列表 | 仅展示自己上传的表情包，永久保留 |
+| 发送 | 左键点击直接发送图片到聊天 |
+| 下载 | 右键弹出自定义菜单 → 下载 |
+| 删除 | 鼠标悬浮表情包 → 点击 ✕ |
+
+> 表情包存储在独立的 `stickers` 表，与附件隔离。
+
+### 灯箱
+
+左键点击聊天中的图片 → 全屏放大；ESC / 点击背景关闭；灯箱内 ⌄ 按钮下载原图。
 
 ---
 
@@ -261,26 +291,89 @@ MAX_BG_SIZE = 10*1024**2       # 背景图大小限制（10MB）
 
 ## Kubernetes 部署
 
-支持 Docker + K8s 集群部署（Python 3.13-slim）。
+### 前置条件
+
+- 3 台 Linux 节点（1 master + 2 worker），已安装 kubeadm 集群 + containerd
+- 每台安装 Docker（`yum install -y docker`）
+- SealedSecret / Secret 存放 `.env` 敏感信息
+- Supabase 项目已配置（见上方 SQL）
+
+### 第一次部署
 
 ```bash
-# 构建镜像
-docker build --no-cache -t ruanks:latest .
+# 1. 将代码拉到每台节点的 /root/ruanks/
+#    或只在 master 初始化后 scp 到 node1/node2
 
-# 部署
+# 2. 每台节点构建镜像
+docker build --no-cache -t ruanks:latest /root/ruanks/
+
+# 3. 创建 Secret（编辑 .env 后执行）
+kubectl create secret generic ruanks-env \
+  --from-env-file=.env -n ruanks
+
+# 4. 部署
 kubectl apply -k k8s/base/
 
-# 一键更新（镜像重建 + 滚动重启，需先配置 SSH 免密）
-sh deploy.sh
+# 5. 确认 Pod 运行
+kubectl -n ruanks get pods -w
 ```
 
-> 如 Pod DNS 解析慢，可用 `hostAliases` 写死 Supabase IP 加速。
+### 更新部署
 
----
+```bash
+# 修改代码后，Windows 上传到 master
+scp D:\my_work\ruanks\src\*.py root@192.168.20.137:/root/ruanks/src/
+
+# master 上同步到节点 + 重建 + 重启
+scp /root/ruanks/src/*.py root@192.168.20.143:/root/ruanks/src/
+scp /root/ruanks/src/*.py root@192.168.20.144:/root/ruanks/src/
+
+# 三台重建镜像并滚动重启
+for ip in "" 192.168.20.143 192.168.20.144; do
+  ssh root@$ip "docker rmi ruanks:latest 2>/dev/null; docker build --no-cache -t ruanks:latest /root/ruanks/"
+done
+kubectl delete pods -n ruanks --all
+```
+
+### DNS 加速
+
+K8s CoreDNS 多一层转发可能导致 Supabase API 变慢。在 Windows 查 IP：
+
+```powershell
+# PowerShell
+[System.Net.Dns]::GetHostAddresses("你的项目.supabase.co")
+```
+
+写入 Pod hosts：
+
+```bash
+kubectl patch deployment ruanks -n ruanks -p \
+  '{"spec":{"template":{"spec":{"hostAliases":[{"ip":"172.64.149.246","hostnames":["xxx.supabase.co"]}]}}}}'
+```
+
+### Windows 端口转发
+
+如果 K8s 在 VMware NAT 内，Windows 需要转发端口：
+
+```powershell
+# 管理员 PowerShell
+netsh interface portproxy add v4tov4 \
+  listenport=8766 listenaddress=0.0.0.0 \
+  connectport=30080 connectaddress=192.168.20.137
+```
+
+### SSH 免密（可选）
+
+```bash
+ssh-keygen -t rsa -b 2048 -N '' -f ~/.ssh/id_rsa
+for ip in 192.168.20.137 192.168.20.143 192.168.20.144; do
+  ssh-copy-id root@$ip
+done
+```
 
 ## 已知问题
 
 | 问题 | 状态 |
 |------|------|
-| 文件下载返回损坏 JSON | 🟡 待修复 — Supabase Storage 签名 URL 返回非预期响应 |
 | K8s 多副本 WebSocket 路由不一致 | 🟡 已规避 — 单副本运行，后续需 Ingress sticky session |
+| Supabase Storage 中文文件名报错 | ✅ 已修复 — storage_key 改用 UUID + 扩展名 |
