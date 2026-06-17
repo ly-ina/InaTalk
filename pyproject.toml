@@ -7,4 +7,7 @@ reportUnknownMemberType = false
 reportUnknownArgumentType = false
 reportUnknownParameterType = false
 reportMissingImports = false
+reportUntypedFunctionDecorator = false
+
+
 

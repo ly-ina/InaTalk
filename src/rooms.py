@@ -3,13 +3,14 @@
 """
 import time
 import uuid
+from typing import Any
 
 from .auth import hash_password, verify_password
 from .config import REST_URL, get_client
 from .files_manager import delete_room_files
 
 
-async def create_room(name: str, password: str, creator: str) -> dict[str, object]:
+async def create_room(name: str, password: str, creator: str) -> dict[str, Any]:
     """创建新房间（房间名唯一）"""
     client = get_client()
 
@@ -46,7 +47,7 @@ async def create_room(name: str, password: str, creator: str) -> dict[str, objec
         return {"success": False, "message": str(e)}
 
 
-async def join_room(room_id: str, password: str, _username: str) -> dict[str, object]:
+async def join_room(room_id: str, password: str, _username: str) -> dict[str, Any]:
     """加入房间（验证密码）"""
     client = get_client()
     url = f"{REST_URL}/rooms?select=*&id=eq.{room_id}"
@@ -78,7 +79,7 @@ async def join_room(room_id: str, password: str, _username: str) -> dict[str, ob
     }
 
 
-async def get_all_rooms() -> list[dict[str, object]]:
+async def get_all_rooms() -> list[dict[str, Any]]:
     """获取所有房间列表"""
     client = get_client()
     url = f"{REST_URL}/rooms?select=id,name,password_hash,creator&order=last_activity.desc"
@@ -94,7 +95,7 @@ async def get_all_rooms() -> list[dict[str, object]]:
     ]
 
 
-async def delete_room(room_id: str, username: str) -> dict[str, object]:
+async def delete_room(room_id: str, username: str) -> dict[str, Any]:
     """删除房间（仅创建者可操作）"""
     client = get_client()
     url = f"{REST_URL}/rooms?select=id,name,creator,background&id=eq.{room_id}"
@@ -123,7 +124,7 @@ async def delete_room(room_id: str, username: str) -> dict[str, object]:
 
 async def change_room_password(
     room_id: str, username: str, old_password: str, new_password: str
-) -> dict[str, object]:
+) -> dict[str, Any]:
     """修改/添加房间密码（仅创建者可操作）"""
     client = get_client()
     url = f"{REST_URL}/rooms?select=id,name,creator,password_hash,salt&id=eq.{room_id}"
@@ -162,7 +163,7 @@ async def change_room_password(
 
 async def remove_room_password(
     room_id: str, username: str, old_password: str
-) -> dict[str, object]:
+) -> dict[str, Any]:
     """移除房间密码（仅创建者可操作）"""
     client = get_client()
     url = f"{REST_URL}/rooms?select=id,name,creator,password_hash,salt&id=eq.{room_id}"
@@ -224,7 +225,7 @@ async def set_announcement(
 
 async def update_room_background(
     room_id: str, username: str, background_url: str | None
-) -> dict[str, object]:
+) -> dict[str, Any]:
     """更新房间背景（仅创建者可操作）"""
     client = get_client()
     url = f"{REST_URL}/rooms?select=id,name,creator,background&id=eq.{room_id}"
@@ -254,7 +255,7 @@ async def update_room_background(
     }
 
 
-async def get_my_rooms_detail(username: str) -> list[dict[str, object]]:
+async def get_my_rooms_detail(username: str) -> list[dict[str, Any]]:
     """获取用户创建的房间（含详细信息）"""
     client = get_client()
     url = (

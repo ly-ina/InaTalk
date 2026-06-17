@@ -5,11 +5,12 @@ import pytest
 from unittest.mock import patch
 
 from src.auth import hash_password
+from src.rooms import create_room, join_room
 from tests.conftest import mock_client, set_mock_response
 
 
 @pytest.mark.asyncio
-async def test_create_room():
+async def test_create_room() -> None:
     with patch("src.rooms.get_client") as mock_get_client:
         mc = mock_client()
         set_mock_response(mc, "get", 200, json_data=[])
@@ -18,27 +19,25 @@ async def test_create_room():
         ])
         mock_get_client.return_value = mc
 
-        from src.rooms import create_room
         result = await create_room("测试房间", "", "tester")
         assert result["success"] is True
         assert len(result["room"]["id"]) == 8
 
 
 @pytest.mark.asyncio
-async def test_create_room_with_password():
+async def test_create_room_with_password() -> None:
     with patch("src.rooms.get_client") as mock_get_client:
         mc = mock_client()
         set_mock_response(mc, "get", 200, json_data=[])
         set_mock_response(mc, "post", 201, json_data=[{"id": "BBBB1111", "name": "私密房"}])
         mock_get_client.return_value = mc
 
-        from src.rooms import create_room
         result = await create_room("私密房", "secret123", "owner")
         assert result["success"] is True
 
 
 @pytest.mark.asyncio
-async def test_join_room_no_password():
+async def test_join_room_no_password() -> None:
     with patch("src.rooms.get_client") as mock_get_client:
         mc = mock_client()
         set_mock_response(mc, "get", 200, json_data=[
@@ -46,13 +45,12 @@ async def test_join_room_no_password():
         ])
         mock_get_client.return_value = mc
 
-        from src.rooms import join_room
         result = await join_room("OPEN001", "", "tester")
         assert result["success"] is True
 
 
 @pytest.mark.asyncio
-async def test_join_room_correct_password():
+async def test_join_room_correct_password() -> None:
     h, s = hash_password("secret123")
     with patch("src.rooms.get_client") as mock_get_client:
         mc = mock_client()
@@ -61,13 +59,12 @@ async def test_join_room_correct_password():
         ])
         mock_get_client.return_value = mc
 
-        from src.rooms import join_room
         result = await join_room("SECR0001", "secret123", "alice")
         assert result["success"] is True
 
 
 @pytest.mark.asyncio
-async def test_join_room_wrong_password():
+async def test_join_room_wrong_password() -> None:
     h, s = hash_password("realpass")
     with patch("src.rooms.get_client") as mock_get_client:
         mc = mock_client()
@@ -76,18 +73,16 @@ async def test_join_room_wrong_password():
         ])
         mock_get_client.return_value = mc
 
-        from src.rooms import join_room
         result = await join_room("SECR0001", "wrongpass", "bob")
         assert result["success"] is False
 
 
 @pytest.mark.asyncio
-async def test_join_nonexistent_room():
+async def test_join_nonexistent_room() -> None:
     with patch("src.rooms.get_client") as mock_get_client:
         mc = mock_client()
         set_mock_response(mc, "get", 200, json_data=[])
         mock_get_client.return_value = mc
 
-        from src.rooms import join_room
         result = await join_room("DEADBEEF", "", "tester")
         assert result["success"] is False
