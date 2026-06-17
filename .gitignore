@@ -1,27 +1,20 @@
-# 敏感配置
 .env
 
-# Python
 __pycache__/
 *.pyc
 *.pyo
 .venv/
 venv/
 
-# 数据库文件
 *.db
 
-# 用户上传的文件
 uploads/
 backgrounds/
 
-# IDE
+logs/
+
 .vscode/
 .idea/
 
-# 日志
-logs/
-
-# OS
 .DS_Store
 Thumbs.db
