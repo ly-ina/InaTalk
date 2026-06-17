@@ -23,7 +23,7 @@ room_members: dict[str, set[str]] = {}
 private_sessions: dict[str, str] = {}
 
 
-async def broadcast_to_room(room_id: str, message: dict[str, object], exclude: Any = None):
+async def broadcast_to_room(room_id: str, message: dict[str, Any], exclude: Any = None):
     """广播消息到房间所有成员"""
     members = room_members.get(room_id, set())
     for username in members:
@@ -55,7 +55,7 @@ async def ws_handler(request: web.Request) -> web.WebSocketResponse:
     current_user: str | None = None
     current_room: str | None = None
 
-    async def send(data: dict[str, object]):
+    async def send(data: dict[str, Any]):
         try:
             await ws.send_str(json.dumps(data, ensure_ascii=False))
         except Exception:
