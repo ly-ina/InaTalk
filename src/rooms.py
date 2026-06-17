@@ -195,7 +195,7 @@ async def remove_room_password(
 
 async def set_announcement(
     room_id: str, username: str, content: str | None
-) -> dict[str, object]:
+) -> dict[str, Any]:
     """设置/更新/清除房间公告（仅创建者可操作），公告最长500字符"""
     client = get_client()
     url = f"{REST_URL}/rooms?select=id,name,creator&id=eq.{room_id}"

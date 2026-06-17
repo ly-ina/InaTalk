@@ -376,21 +376,30 @@ ssh root@<Pod所在节点IP> "curl -s http://localhost:30080/api/health"
 ### 更新部署
 
 ```bash
-# Windows → master
-scp D:\my_work\ruanks\src\*.py D:\my_work\ruanks\static\** root@192.168.20.137:/root/ruanks/
+# === Windows → master（本地 PowerShell 执行）===
+scp D:\my_work\ruanks\src\*.py root@192.168.20.137:/root/ruanks/src/
+scp -r D:\my_work\ruanks\static\* root@192.168.20.137:/root/ruanks/static/
+scp -r D:\my_work\ruanks\k8s\* root@192.168.20.137:/root/ruanks/k8s/
+scp D:\my_work\ruanks\main.py root@192.168.20.137:/root/ruanks/
+scp D:\my_work\ruanks\requirements.txt root@192.168.20.137:/root/ruanks/
 
-# master → 节点
+# === master → worker 节点 ===
 for ip in 192.168.20.143 192.168.20.144; do
   scp /root/ruanks/src/*.py root@$ip:/root/ruanks/src/
   scp /root/ruanks/static/js/*.js root@$ip:/root/ruanks/static/js/
   scp /root/ruanks/static/css/*.css root@$ip:/root/ruanks/static/css/
+  scp /root/ruanks/static/index.html root@$ip:/root/ruanks/static/
 done
 
-# 三台重建镜像 + 重启 Pod
-for ip in "" 192.168.20.143 192.168.20.144; do
+# === 三台重建镜像 + 重启 Pod ===
+# master (本地执行)
+docker rmi ruanks:latest 2>/dev/null; docker build --no-cache -t ruanks:latest /root/ruanks/
+# worker 节点
+for ip in 192.168.20.143 192.168.20.144; do
   ssh root@$ip "docker rmi ruanks:latest 2>/dev/null; docker build --no-cache -t ruanks:latest /root/ruanks/"
 done
 kubectl delete pods -n ruanks --all
+kubectl -n ruanks scale deployment ruanks --replicas=1
 ```
 
 > ⚠️ 每次更新后 hostAliases 会丢失，需重新 patch
@@ -432,7 +441,10 @@ for ip in 192.168.20.143 192.168.20.144; do
     scp /root/ruanks/static/js/*.js root@$ip:/root/ruanks/static/js/
     scp /root/ruanks/static/css/*.css root@$ip:/root/ruanks/static/css/
 done
-for ip in "" 192.168.20.143 192.168.20.144; do
+# master (本地执行)
+docker rmi ruanks:latest 2>/dev/null; docker build --no-cache -t ruanks:latest /root/ruanks/
+# worker 节点
+for ip in 192.168.20.143 192.168.20.144; do
     ssh root@$ip "docker rmi ruanks:latest 2>/dev/null; docker build --no-cache -t ruanks:latest /root/ruanks/"
 done
 kubectl delete pods -n ruanks --all
