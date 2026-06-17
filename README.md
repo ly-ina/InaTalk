@@ -1,6 +1,6 @@
-# 轻聊 · 临时 IM 系统
+# 轻聊 InaTalk · IM 即时通讯系统
 
-纯 Python + Supabase (PostgreSQL + Storage) + WebSocket 打造的轻量化临时即时通讯系统。**无注册、无手机号**，开箱即用。支持 Kubernetes 集群部署。
+纯 Python + Supabase (PostgreSQL + Storage) + WebSocket 打造的轻量化即时通讯系统。**无注册、无手机号**，开箱即用。支持 Kubernetes 集群部署。
 
 ---
 

@@ -5,7 +5,6 @@ namespace: ruanks
 
 resources:
   - namespace.yaml
-  - secret.yaml
   - configmap.yaml
   - deployment.yaml
   - service.yaml

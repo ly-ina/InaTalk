@@ -1,5 +1,5 @@
 """
-轻聊 - 临时 IM 系统 入口
+轻聊 InaTalk - IM 即时通讯系统 入口
 启动方法：python main.py              （普通模式）
          python main.py --dev         （热更新模式）
 """

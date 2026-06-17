@@ -1,11 +1,11 @@
 # ============================================
-# 轻聊 · 容器镜像
+# 轻聊 InaTalk · 容器镜像
 # 构建: docker build -t ruanks:latest .
 # ============================================
 FROM python:3.13-slim
 
 LABEL app="ruanks" \
-      description="轻聊 - 临时 IM 系统"
+      description="轻聊 InaTalk"
 
 WORKDIR /app
 

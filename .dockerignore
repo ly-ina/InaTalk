@@ -23,8 +23,18 @@ venv/
 README.md
 *.md
 
+# 测试
+tests/
+
+# 日志
+logs/
+
 # k8s 清单（不需要在镜像里）
 k8s/
+
+# 部署脚本
+deploy.sh
+env.example
 
 # 其他
 Dockerfile
